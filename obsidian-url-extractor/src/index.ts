@@ -89,7 +89,7 @@ export function createFilenameFromUrl(url: string): string {
 /**
  * Create a new note with the URL as content
  */
-async function createNoteForUrl(url: string, notesPath: string): Promise<NoteCreationResult> {
+export async function createNoteForUrl(url: string, notesPath: string): Promise<NoteCreationResult> {
   const filename = createFilenameFromUrl(url);
   const filepath = path.join(notesPath, `${filename}.md`);
 
@@ -114,7 +114,7 @@ async function createNoteForUrl(url: string, notesPath: string): Promise<NoteCre
 /**
  * Process the todo list file
  */
-async function processTodoList(filePath: string, notesPath: string): Promise<ProcessingSummary> {
+export async function processTodoList(filePath: string, notesPath: string): Promise<ProcessingSummary> {
   console.log(`\n📋 Processing todo list: ${path.basename(filePath)}\n`);
 
   // Read the todo file
@@ -186,7 +186,7 @@ async function processTodoList(filePath: string, notesPath: string): Promise<Pro
 /**
  * Main function
  */
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.log('🔗 Obsidian URL Extractor\n');
   console.log('Extracts URLs from todo lists and creates individual notes\n');
 
@@ -218,8 +218,11 @@ async function main(): Promise<void> {
   }
 }
 
-// Run the script
-main().catch(error => {
-  console.error('❌ Fatal error:', error);
-  process.exit(1);
-});
+// Run the script only when executed directly (not when imported)
+const isMainModule = process.argv[1]?.endsWith('index.js') || process.argv[1]?.endsWith('index.ts');
+if (isMainModule) {
+  main().catch(error => {
+    console.error('❌ Fatal error:', error);
+    process.exit(1);
+  });
+}
