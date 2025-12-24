@@ -8,16 +8,20 @@ Extract URLs from Obsidian todo lists and create individual notes for each URL.
 
 **Location:** `obsidian-url-extractor/`
 
+**Technology:** TypeScript
+
 **Features:**
 - Extracts URLs from todo items (both plain URLs and markdown links)
 - Creates individual notes with URLs as content
 - Removes processed items from the original todo list
 - Prevents duplicate note creation
+- Full type safety with TypeScript
 
 **Quick Start:**
 ```bash
 cd obsidian-url-extractor
 npm install
+npm run build
 cp .env.example .env
 # Edit .env with your paths
 npm start

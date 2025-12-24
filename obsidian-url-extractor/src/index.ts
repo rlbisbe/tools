@@ -3,10 +3,17 @@
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
+import type {
+  Config,
+  ExtractedUrl,
+  NoteCreationResult,
+  ProcessedUrl,
+  ProcessingSummary
+} from './types.js';
 
 dotenv.config();
 
-const config = {
+const config: Config = {
   notesPath: process.env.OBSIDIAN_NOTES_PATH || './notes',
   todoFile: process.env.TODO_FILE || 'todo.md',
 };
@@ -15,14 +22,18 @@ const config = {
  * Extract URLs from a line of text
  * Supports both plain URLs and markdown-style links
  */
-function extractUrlsFromLine(line) {
-  const urls = [];
+export function extractUrlsFromLine(line: string): ExtractedUrl[] {
+  const urls: ExtractedUrl[] = [];
 
   // Match markdown-style links [text](url)
   const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = markdownLinkRegex.exec(line)) !== null) {
-    urls.push({ url: match[2], type: 'markdown', fullMatch: match[0] });
+    const url = match[2];
+    const fullMatch = match[0];
+    if (url && fullMatch) {
+      urls.push({ url, type: 'markdown', fullMatch });
+    }
   }
 
   // Match plain URLs (excluding already matched markdown links)
@@ -43,14 +54,14 @@ function extractUrlsFromLine(line) {
 /**
  * Check if a line is a todo item
  */
-function isTodoLine(line) {
+export function isTodoLine(line: string): boolean {
   return /^\s*-\s*\[[ x]\]/i.test(line);
 }
 
 /**
  * Create a filename from URL
  */
-function createFilenameFromUrl(url) {
+export function createFilenameFromUrl(url: string): string {
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.replace(/^www\./, '');
@@ -78,7 +89,7 @@ function createFilenameFromUrl(url) {
 /**
  * Create a new note with the URL as content
  */
-async function createNoteForUrl(url, notesPath) {
+async function createNoteForUrl(url: string, notesPath: string): Promise<NoteCreationResult> {
   const filename = createFilenameFromUrl(url);
   const filepath = path.join(notesPath, `${filename}.md`);
 
@@ -103,20 +114,25 @@ async function createNoteForUrl(url, notesPath) {
 /**
  * Process the todo list file
  */
-async function processTodoList(filePath, notesPath) {
+async function processTodoList(filePath: string, notesPath: string): Promise<ProcessingSummary> {
   console.log(`\n📋 Processing todo list: ${path.basename(filePath)}\n`);
 
   // Read the todo file
   const content = await fs.readFile(filePath, 'utf-8');
   const lines = content.split('\n');
 
-  const linesToKeep = [];
-  const processedUrls = [];
+  const linesToKeep: string[] = [];
+  const processedUrls: ProcessedUrl[] = [];
   let urlCount = 0;
 
   // Process each line
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (!line) {
+      linesToKeep.push('');
+      continue;
+    }
+
     const lineNum = i + 1;
 
     // Check if this is a todo item with a URL
@@ -133,7 +149,8 @@ async function processTodoList(filePath, notesPath) {
             processedUrls.push({ url, ...result });
             urlCount++;
           } catch (error) {
-            console.error(`  ❌ Failed to create note for ${url}:`, error.message);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`  ❌ Failed to create note for ${url}:`, errorMessage);
             // Keep the line if we couldn't process the URL
             linesToKeep.push(line);
             continue;
@@ -169,7 +186,7 @@ async function processTodoList(filePath, notesPath) {
 /**
  * Main function
  */
-async function main() {
+async function main(): Promise<void> {
   console.log('🔗 Obsidian URL Extractor\n');
   console.log('Extracts URLs from todo lists and creates individual notes\n');
 
@@ -195,7 +212,8 @@ async function main() {
     await processTodoList(todoPath, config.notesPath);
     console.log('\n✨ Done!');
   } catch (error) {
-    console.error('\n❌ Error processing todo list:', error.message);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('\n❌ Error processing todo list:', errorMessage);
     process.exit(1);
   }
 }

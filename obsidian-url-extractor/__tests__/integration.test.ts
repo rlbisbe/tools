@@ -1,18 +1,15 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 describe('URL Extractor Integration', () => {
-  const testDir = path.join(__dirname, 'test-workspace');
+  const testDir = path.join(process.cwd(), '__tests__', 'test-workspace');
   const notesDir = path.join(testDir, 'notes');
   const todoFile = path.join(notesDir, 'todo.md');
-  const scriptPath = path.join(__dirname, '..', 'index.js');
+  const scriptPath = path.join(process.cwd(), 'dist', 'index.js');
 
   beforeEach(async () => {
     // Create test workspace

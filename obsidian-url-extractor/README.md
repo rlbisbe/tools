@@ -1,6 +1,6 @@
 # Obsidian URL Extractor
 
-A simple JavaScript tool that extracts URLs from Obsidian todo lists, creates individual notes for each URL, and removes the processed items from the original list.
+A TypeScript tool that extracts URLs from Obsidian todo lists, creates individual notes for each URL, and removes the processed items from the original list.
 
 ## Features
 
@@ -10,12 +10,15 @@ A simple JavaScript tool that extracts URLs from Obsidian todo lists, creates in
 - ✅ Automatically removes processed todo items from the original list
 - ✅ Prevents duplicate note creation
 - ✅ Generates clean, readable filenames from URLs
+- ✅ Written in TypeScript with full type safety
+- ✅ Comprehensive test suite
 
 ## Installation
 
 ```bash
 cd obsidian-url-extractor
 npm install
+npm run build
 ```
 
 ## Configuration
@@ -128,16 +131,37 @@ Filenames are:
 
 ## Requirements
 
-- Node.js 18+ (for ES modules support)
+- Node.js 18+ (for ES modules and TypeScript support)
 - npm or yarn
+- TypeScript 5.3+
 
 ## Development
+
+### Building
+
+The project is written in TypeScript and must be compiled before running:
+
+```bash
+npm run build
+```
+
+This compiles TypeScript files from `src/` to JavaScript in `dist/`.
+
+### Development Mode
+
+For rapid development, use the dev script which runs TypeScript directly:
+
+```bash
+npm run dev
+```
 
 ### Running Tests
 
 ```bash
 npm test
 ```
+
+Tests are written in TypeScript and run using ts-jest.
 
 ### Watch Mode
 
@@ -149,6 +173,12 @@ npm run test:watch
 
 ```bash
 npm run test:coverage
+```
+
+### Clean Build Artifacts
+
+```bash
+npm run clean
 ```
 
 ## Use Cases

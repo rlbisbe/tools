@@ -1,64 +1,4 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Helper functions extracted for testing
-export function extractUrlsFromLine(line) {
-  const urls = [];
-
-  // Match markdown-style links [text](url)
-  const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let match;
-  while ((match = markdownLinkRegex.exec(line)) !== null) {
-    urls.push({ url: match[2], type: 'markdown', fullMatch: match[0] });
-  }
-
-  // Match plain URLs (excluding already matched markdown links)
-  let tempLine = line;
-  urls.forEach(({ fullMatch }) => {
-    tempLine = tempLine.replace(fullMatch, '');
-  });
-
-  const urlRegex = /https?:\/\/[^\s<>\[\]()]+/g;
-  const plainMatches = tempLine.matchAll(urlRegex);
-  for (const match of plainMatches) {
-    urls.push({ url: match[0], type: 'plain', fullMatch: match[0] });
-  }
-
-  return urls;
-}
-
-export function isTodoLine(line) {
-  return /^\s*-\s*\[[ x]\]/i.test(line);
-}
-
-export function createFilenameFromUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.replace(/^www\./, '');
-    const pathname = urlObj.pathname.replace(/\/$/, '');
-    const lastPart = pathname.split('/').filter(Boolean).pop() || hostname;
-
-    const filename = `${hostname}-${lastPart}`
-      .replace(/[^a-z0-9]/gi, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .toLowerCase()
-      .substring(0, 80);
-
-    return filename;
-  } catch (error) {
-    return url
-      .replace(/[^a-z0-9]/gi, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .toLowerCase()
-      .substring(0, 80);
-  }
-}
+import { extractUrlsFromLine, isTodoLine, createFilenameFromUrl } from '../src/index.js';
 
 describe('URL Extractor', () => {
   describe('extractUrlsFromLine', () => {
@@ -67,8 +7,8 @@ describe('URL Extractor', () => {
       const urls = extractUrlsFromLine(line);
 
       expect(urls).toHaveLength(1);
-      expect(urls[0].url).toBe('https://example.com/article');
-      expect(urls[0].type).toBe('plain');
+      expect(urls[0]?.url).toBe('https://example.com/article');
+      expect(urls[0]?.type).toBe('plain');
     });
 
     test('extracts markdown links', () => {
@@ -76,8 +16,8 @@ describe('URL Extractor', () => {
       const urls = extractUrlsFromLine(line);
 
       expect(urls).toHaveLength(1);
-      expect(urls[0].url).toBe('https://example.com/post');
-      expect(urls[0].type).toBe('markdown');
+      expect(urls[0]?.url).toBe('https://example.com/post');
+      expect(urls[0]?.type).toBe('markdown');
     });
 
     test('extracts multiple URLs from one line', () => {
@@ -85,10 +25,10 @@ describe('URL Extractor', () => {
       const urls = extractUrlsFromLine(line);
 
       expect(urls).toHaveLength(2);
-      expect(urls[0].url).toBe('https://test.com');
-      expect(urls[0].type).toBe('markdown');
-      expect(urls[1].url).toBe('https://example.com');
-      expect(urls[1].type).toBe('plain');
+      expect(urls[0]?.url).toBe('https://test.com');
+      expect(urls[0]?.type).toBe('markdown');
+      expect(urls[1]?.url).toBe('https://example.com');
+      expect(urls[1]?.type).toBe('plain');
     });
 
     test('handles lines with no URLs', () => {
@@ -103,8 +43,8 @@ describe('URL Extractor', () => {
       const urls = extractUrlsFromLine(line);
 
       expect(urls).toHaveLength(2);
-      expect(urls[0].url).toBe('http://example.com');
-      expect(urls[1].url).toBe('https://secure.com');
+      expect(urls[0]?.url).toBe('http://example.com');
+      expect(urls[1]?.url).toBe('https://secure.com');
     });
   });
 
