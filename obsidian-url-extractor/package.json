@@ -1,0 +1,28 @@
+{
+  "name": "obsidian-url-extractor",
+  "version": "1.0.0",
+  "description": "Extract URLs from Obsidian todo lists and create individual notes",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage"
+  },
+  "keywords": [
+    "obsidian",
+    "markdown",
+    "todo",
+    "url-extractor",
+    "productivity"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
