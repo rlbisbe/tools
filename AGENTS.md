@@ -21,6 +21,21 @@ All code changes MUST include appropriate tests. This is not optional.
 npm test  # or appropriate test command for this project
 ```
 
+### Tests Must Pass Before Pull Requests
+
+**CRITICAL**: Before creating a pull request, you MUST:
+
+1. Run the complete test suite: `npm test`
+2. Verify all tests pass (100% pass rate)
+3. Fix any failing tests before proceeding
+4. Only create the PR after confirming tests are green
+
+This ensures that:
+- The main branch remains stable
+- Other developers can safely pull your changes
+- CI/CD pipelines don't fail unnecessarily
+- Code review can focus on logic, not broken tests
+
 ### When Tests Fail
 
 If tests fail after your changes, you must fix the underlying issue.
