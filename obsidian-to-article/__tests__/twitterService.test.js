@@ -1,11 +1,13 @@
 import { jest } from '@jest/globals';
-import { createTwitterService, TwitterService } from '../twitterService.js';
 
-// Mock TwitterApi
+// Mock TwitterApi BEFORE importing the service
+const mockSingleTweet = jest.fn();
+const mockSearch = jest.fn();
+
 const mockReadOnlyClient = {
   v2: {
-    singleTweet: jest.fn(),
-    search: jest.fn()
+    singleTweet: mockSingleTweet,
+    search: mockSearch
   }
 };
 
@@ -13,11 +15,19 @@ const mockTwitterApiInstance = {
   readOnly: mockReadOnlyClient
 };
 
-const mockTwitterApi = jest.fn(() => mockTwitterApiInstance);
+class MockTwitterApi {
+  constructor(bearerToken) {
+    this.bearerToken = bearerToken;
+    this.readOnly = mockReadOnlyClient;
+  }
+}
 
 jest.unstable_mockModule('twitter-api-v2', () => ({
-  TwitterApi: mockTwitterApi
+  TwitterApi: MockTwitterApi
 }));
+
+// Import AFTER mocking
+const { createTwitterService, TwitterService } = await import('../twitterService.js');
 
 // Skip network-dependent tests in CI
 const describeIfNetwork = process.env.SKIP_NETWORK_TESTS ? describe.skip : describe;
@@ -102,16 +112,16 @@ describeIfNetwork('TwitterService', () => {
         }
       };
 
-      mockReadOnlyClient.v2.singleTweet.mockResolvedValue(mockTweet);
+      mockSingleTweet.mockResolvedValue(mockTweet);
 
       const result = await service.fetchTweet('123');
 
-      expect(mockReadOnlyClient.v2.singleTweet).toHaveBeenCalledWith('123', expect.any(Object));
+      expect(mockSingleTweet).toHaveBeenCalledWith('123', expect.any(Object));
       expect(result).toEqual(mockTweet);
     });
 
     test('handles API errors', async () => {
-      mockReadOnlyClient.v2.singleTweet.mockRejectedValue(new Error('API Error'));
+      mockSingleTweet.mockRejectedValue(new Error('API Error'));
 
       await expect(service.fetchTweet('123')).rejects.toThrow('API Error');
     });
@@ -142,8 +152,8 @@ describeIfNetwork('TwitterService', () => {
         }
       };
 
-      mockReadOnlyClient.v2.singleTweet.mockResolvedValue(mockTweet);
-      mockReadOnlyClient.v2.search.mockResolvedValue({
+      mockSingleTweet.mockResolvedValue(mockTweet);
+      mockSearch.mockResolvedValue({
         data: { data: [] }
       });
 
@@ -197,8 +207,8 @@ describeIfNetwork('TwitterService', () => {
         }
       };
 
-      mockReadOnlyClient.v2.singleTweet.mockResolvedValue(mainTweet);
-      mockReadOnlyClient.v2.search.mockResolvedValue(threadTweets);
+      mockSingleTweet.mockResolvedValue(mainTweet);
+      mockSearch.mockResolvedValue(threadTweets);
 
       const result = await service.fetchThread('123');
 
@@ -229,8 +239,8 @@ describeIfNetwork('TwitterService', () => {
         }
       };
 
-      mockReadOnlyClient.v2.singleTweet.mockResolvedValue(mainTweet);
-      mockReadOnlyClient.v2.search.mockResolvedValue(threadTweets);
+      mockSingleTweet.mockResolvedValue(mainTweet);
+      mockSearch.mockResolvedValue(threadTweets);
 
       const result = await service.fetchThread('123');
 
@@ -312,12 +322,20 @@ describeIfNetwork('TwitterService', () => {
 
     test('includes engagement metrics for threads', () => {
       const threadData = {
-        tweets: [{
-          id: '123',
-          text: 'Tweet',
-          created_at: '2025-01-01T12:00:00Z',
-          public_metrics: { reply_count: 10, retweet_count: 20, like_count: 30 }
-        }],
+        tweets: [
+          {
+            id: '123',
+            text: 'First tweet',
+            created_at: '2025-01-01T12:00:00Z',
+            public_metrics: { reply_count: 10, retweet_count: 20, like_count: 30 }
+          },
+          {
+            id: '124',
+            text: 'Second tweet',
+            created_at: '2025-01-01T12:01:00Z',
+            public_metrics: { reply_count: 5, retweet_count: 10, like_count: 15 }
+          }
+        ],
         author: { name: 'User', username: 'user', verified: false }
       };
 
@@ -351,8 +369,8 @@ describeIfNetwork('TwitterService', () => {
         }
       };
 
-      mockReadOnlyClient.v2.singleTweet.mockResolvedValue(mockTweet);
-      mockReadOnlyClient.v2.search.mockResolvedValue({ data: { data: [] } });
+      mockSingleTweet.mockResolvedValue(mockTweet);
+      mockSearch.mockResolvedValue({ data: { data: [] } });
 
       const markdown = await service.urlToMarkdown('https://twitter.com/user/status/123');
 
