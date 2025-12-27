@@ -10,6 +10,8 @@ Convert Obsidian notes containing URLs into full-length Markdown articles using 
 - ✅ Removes ads, navigation, sidebars, and page clutter
 - ✅ Preserves article structure, code blocks, images, and links
 - ✅ **Twitter/X integration** - extracts tweets and threads using Twitter API
+- ✅ **Dry-run mode** - preview results without writing files
+- ✅ **Auto-cleanup** - optionally remove processed links from source files
 - ✅ Converts YouTube and Instagram URLs (coming soon)
 - ✅ Mock mode for testing without API key
 - ✅ Batch processing of multiple notes
@@ -166,6 +168,23 @@ You can customize the behavior via `.env` file:
 | `TWITTER_BEARER_TOKEN` | Your Twitter API Bearer Token (optional) | - |
 | `OBSIDIAN_NOTES_PATH` | Directory containing your notes | `./notes` |
 | `OUTPUT_PATH` | Directory for generated articles | `./output` |
+| `DRY_RUN` | Preview results without writing files or modifying source | `false` |
+| `DELETE_LINKS` | Remove processed links from source files | `true` |
+
+### Advanced Features
+
+**Dry-Run Mode** (`DRY_RUN=true`)
+- Preview what would be converted without actually writing files
+- Shows the first 500 characters of each converted article
+- Doesn't modify source files
+- Useful for testing before committing to conversions
+
+**Auto-Cleanup** (`DELETE_LINKS=true`, enabled by default)
+- Automatically removes processed URLs from source Obsidian notes
+- Keeps your notes clean after articles are converted
+- Removes both plain URLs and markdown-style links
+- Set to `false` to keep original URLs in source files
+- Skipped when in dry-run mode
 
 ## Example
 

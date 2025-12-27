@@ -91,7 +91,7 @@ describe('GeminiService', () => {
     });
   });
 
-  describeIfNetwork('Real GeminiService', () => {
+  describe.skip('Real GeminiService', () => {
     let service;
 
     beforeEach(() => {

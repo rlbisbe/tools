@@ -21,7 +21,9 @@ const config = {
   useMockGemini: process.env.USE_MOCK_GEMINI === 'true',
   twitterBearerToken: process.env.TWITTER_BEARER_TOKEN,
   notesPath: process.env.OBSIDIAN_NOTES_PATH || './notes',
-  outputPath: process.env.OUTPUT_PATH || './output'
+  outputPath: process.env.OUTPUT_PATH || './output',
+  dryRun: process.env.DRY_RUN === 'true',
+  deleteLinks: process.env.DELETE_LINKS !== 'false' // Default to true
 };
 
 /**
@@ -32,7 +34,8 @@ async function processNote(filePath, geminiService, twitterService) {
 
   try {
     // Read the note content
-    const content = await fs.readFile(filePath, 'utf-8');
+    let content = await fs.readFile(filePath, 'utf-8');
+    const originalContent = content;
 
     // Extract URLs from the note
     const urls = extractUrls(content);
@@ -43,6 +46,8 @@ async function processNote(filePath, geminiService, twitterService) {
     }
 
     console.log(`  Found ${urls.length} URL(s)`);
+
+    const processedUrls = [];
 
     // Process each URL
     for (const url of urls) {
@@ -76,17 +81,55 @@ async function processNote(filePath, geminiService, twitterService) {
           filename = createFilenameFromUrl(url);
         }
 
-        // Save the result
         const outputFile = path.join(config.outputPath, `${filename}.md`);
 
-        await fs.mkdir(config.outputPath, { recursive: true });
-        await fs.writeFile(outputFile, markdown, 'utf-8');
+        // Handle dry-run mode
+        if (config.dryRun) {
+          console.log(`  🔍 [DRY RUN] Would save to: ${outputFile}`);
+          console.log('  📋 Preview (first 500 chars):');
+          console.log('  ' + '─'.repeat(50));
+          console.log(markdown.substring(0, 500).split('\n').map(line => `  ${line}`).join('\n'));
+          if (markdown.length > 500) {
+            console.log('  ... (truncated)');
+          }
+          console.log('  ' + '─'.repeat(50));
+        } else {
+          // Save the result
+          await fs.mkdir(config.outputPath, { recursive: true });
+          await fs.writeFile(outputFile, markdown, 'utf-8');
+          console.log(`  ✅ Saved: ${outputFile}`);
+        }
 
-        console.log(`  ✅ Saved: ${outputFile}`);
+        // Track successfully processed URLs
+        processedUrls.push(url);
 
       } catch (error) {
         console.error(`  ❌ Failed to process ${url}:`, error.message);
       }
+    }
+
+    // Delete links from source file if enabled
+    if (config.deleteLinks && processedUrls.length > 0 && !config.dryRun) {
+      let modifiedContent = originalContent;
+
+      for (const url of processedUrls) {
+        // Remove markdown-style links containing this URL
+        const markdownLinkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`, 'g');
+        modifiedContent = modifiedContent.replace(markdownLinkRegex, '');
+
+        // Remove plain URLs
+        modifiedContent = modifiedContent.replace(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+      }
+
+      // Clean up extra blank lines (more than 2 consecutive)
+      modifiedContent = modifiedContent.replace(/\n{3,}/g, '\n\n');
+
+      if (modifiedContent !== originalContent) {
+        await fs.writeFile(filePath, modifiedContent, 'utf-8');
+        console.log(`  🗑️  Removed ${processedUrls.length} processed link(s) from source file`);
+      }
+    } else if (config.deleteLinks && processedUrls.length > 0 && config.dryRun) {
+      console.log(`  🔍 [DRY RUN] Would remove ${processedUrls.length} processed link(s) from source file`);
     }
 
   } catch (error) {
@@ -116,7 +159,9 @@ async function main() {
   console.log(`📁 Notes path: ${config.notesPath}`);
   console.log(`📁 Output path: ${config.outputPath}`);
   console.log(`🤖 Using ${config.useMockGemini ? 'MOCK' : 'REAL'} Gemini service`);
-  console.log(`🐦 Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}\n`);
+  console.log(`🐦 Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}`);
+  console.log(`🔍 Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}`);
+  console.log(`🗑️  Delete links: ${config.deleteLinks ? 'ENABLED' : 'DISABLED'}\n`);
 
   // Check if notes directory exists
   try {
