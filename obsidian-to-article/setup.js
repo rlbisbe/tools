@@ -2,130 +2,17 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import readline from 'readline';
+import inquirer from 'inquirer';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
-// Helper to ask questions
-function ask(question, defaultValue = '') {
-  return new Promise((resolve) => {
-    const prompt = defaultValue
-      ? `${question} (default: ${defaultValue}): `
-      : `${question}: `;
-
-    rl.question(prompt, (answer) => {
-      resolve(answer.trim() || defaultValue);
-    });
-  });
-}
-
-// Helper to ask yes/no questions
-async function askYesNo(question, defaultValue = 'yes') {
-  const answer = await ask(`${question} (yes/no)`, defaultValue);
-  return answer.toLowerCase() === 'yes' || answer.toLowerCase() === 'y';
-}
-
-console.log('🚀 Obsidian to Article Converter - Setup Wizard\n');
-console.log('This wizard will help you configure your environment variables.\n');
-
-async function setup() {
-  const config = {};
-
-  // Gemini Configuration
-  console.log('━'.repeat(60));
-  console.log('📝 GEMINI API CONFIGURATION');
-  console.log('━'.repeat(60));
-
-  const useMockGemini = await askYesNo(
-    'Do you want to use MOCK Gemini service (no API key needed)?',
-    'yes'
-  );
-
-  config.USE_MOCK_GEMINI = useMockGemini ? 'true' : 'false';
-
-  if (!useMockGemini) {
-    console.log('\n💡 To get a Gemini API key, visit: https://makersuite.google.com/app/apikey\n');
-    const apiKey = await ask('Enter your Gemini API key');
-
-    if (!apiKey) {
-      console.log('⚠️  Warning: No API key provided. Setting USE_MOCK_GEMINI to true.');
-      config.USE_MOCK_GEMINI = 'true';
-    } else {
-      config.GEMINI_API_KEY = apiKey;
-    }
-  } else {
-    config.GEMINI_API_KEY = 'your_gemini_api_key_here';
-  }
-
-  // Twitter Configuration
-  console.log('\n' + '━'.repeat(60));
-  console.log('🐦 TWITTER API CONFIGURATION (Optional)');
-  console.log('━'.repeat(60));
-
-  const useTwitter = await askYesNo(
-    'Do you want to enable Twitter/X URL support?',
-    'no'
-  );
-
-  if (useTwitter) {
-    console.log('\n💡 To get a Twitter Bearer Token, visit: https://developer.twitter.com/en/portal/dashboard\n');
-    const twitterToken = await ask('Enter your Twitter Bearer Token (leave empty to skip)');
-
-    if (twitterToken) {
-      config.TWITTER_BEARER_TOKEN = twitterToken;
-    } else {
-      config.TWITTER_BEARER_TOKEN = 'your_twitter_bearer_token_here';
-      console.log('ℹ️  Twitter URLs will be skipped without a valid token.');
-    }
-  } else {
-    config.TWITTER_BEARER_TOKEN = 'your_twitter_bearer_token_here';
-  }
-
-  // Input/Output Configuration
-  console.log('\n' + '━'.repeat(60));
-  console.log('📁 INPUT/OUTPUT CONFIGURATION');
-  console.log('━'.repeat(60));
-
-  config.OBSIDIAN_NOTES_PATH = await ask(
-    'Enter the path to your Obsidian notes directory',
-    './notes'
-  );
-
-  config.OUTPUT_PATH = await ask(
-    'Enter the path for output articles',
-    './output'
-  );
-
-  // Processing Options
-  console.log('\n' + '━'.repeat(60));
-  console.log('⚙️  PROCESSING OPTIONS');
-  console.log('━'.repeat(60));
-
-  const dryRun = await askYesNo(
-    'Enable DRY RUN mode (preview without writing files)?',
-    'no'
-  );
-  config.DRY_RUN = dryRun ? 'true' : 'false';
-
-  const deleteLinks = await askYesNo(
-    'Enable AUTO-CLEANUP (remove processed links from source files)?',
-    'yes'
-  );
-  config.DELETE_LINKS = deleteLinks ? 'true' : 'false';
-
-  // Generate .env content
-  console.log('\n' + '━'.repeat(60));
-  console.log('📝 GENERATING .env FILE');
-  console.log('━'.repeat(60));
-
-  const envContent = `# Gemini API Configuration
+/**
+ * Generate .env file content from config
+ */
+export function generateEnvContent(config) {
+  return `# Gemini API Configuration
 GEMINI_API_KEY=${config.GEMINI_API_KEY}
 
 # Set to 'true' to use mock Gemini API (for testing without API key)
@@ -146,22 +33,127 @@ DRY_RUN=${config.DRY_RUN}
 # Set to 'false' to keep processed links in source files (default: true)
 DELETE_LINKS=${config.DELETE_LINKS}
 `;
+}
+
+/**
+ * Get setup questions
+ */
+export function getSetupQuestions() {
+  return [
+    {
+      type: 'confirm',
+      name: 'useMockGemini',
+      message: 'Do you want to use MOCK Gemini service (no API key needed)?',
+      default: true
+    },
+    {
+      type: 'input',
+      name: 'geminiApiKey',
+      message: '💡 Enter your Gemini API key (get one at https://makersuite.google.com/app/apikey):',
+      when: (answers) => !answers.useMockGemini,
+      validate: (input) => {
+        if (!input || input.trim() === '') {
+          return 'API key is required when not using mock mode. Press Ctrl+C to cancel or enter a key.';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'confirm',
+      name: 'useTwitter',
+      message: 'Do you want to enable Twitter/X URL support?',
+      default: false
+    },
+    {
+      type: 'input',
+      name: 'twitterBearerToken',
+      message: '💡 Enter your Twitter Bearer Token (get one at https://developer.twitter.com/en/portal/dashboard):',
+      when: (answers) => answers.useTwitter
+    },
+    {
+      type: 'input',
+      name: 'notesPath',
+      message: 'Enter the path to your Obsidian notes directory:',
+      default: './notes'
+    },
+    {
+      type: 'input',
+      name: 'outputPath',
+      message: 'Enter the path for output articles:',
+      default: './output'
+    },
+    {
+      type: 'confirm',
+      name: 'dryRun',
+      message: 'Enable DRY RUN mode (preview without writing files)?',
+      default: false
+    },
+    {
+      type: 'confirm',
+      name: 'deleteLinks',
+      message: 'Enable AUTO-CLEANUP (remove processed links from source files)?',
+      default: true
+    }
+  ];
+}
+
+/**
+ * Transform user answers to config object
+ */
+export function answersToConfig(answers) {
+  return {
+    USE_MOCK_GEMINI: answers.useMockGemini ? 'true' : 'false',
+    GEMINI_API_KEY: answers.useMockGemini
+      ? 'your_gemini_api_key_here'
+      : (answers.geminiApiKey || 'your_gemini_api_key_here'),
+    TWITTER_BEARER_TOKEN: answers.twitterBearerToken || 'your_twitter_bearer_token_here',
+    OBSIDIAN_NOTES_PATH: answers.notesPath,
+    OUTPUT_PATH: answers.outputPath,
+    DRY_RUN: answers.dryRun ? 'true' : 'false',
+    DELETE_LINKS: answers.deleteLinks ? 'true' : 'false'
+  };
+}
+
+/**
+ * Main setup function
+ */
+export async function runSetup() {
+  console.log('🚀 Obsidian to Article Converter - Setup Wizard\n');
+  console.log('This wizard will help you configure your environment variables.\n');
+
+  // Get user answers
+  const answers = await inquirer.prompt(getSetupQuestions());
+
+  // Transform to config
+  const config = answersToConfig(answers);
+
+  // Generate .env content
+  const envContent = generateEnvContent(config);
+  const envPath = path.join(__dirname, '.env');
 
   // Check if .env already exists
-  const envPath = path.join(__dirname, '.env');
   let shouldWrite = true;
-
   try {
     await fs.access(envPath);
     console.log('\n⚠️  .env file already exists!');
-    shouldWrite = await askYesNo('Do you want to overwrite it?', 'no');
 
-    if (!shouldWrite) {
+    const { overwrite } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'overwrite',
+        message: 'Do you want to overwrite it?',
+        default: false
+      }
+    ]);
+
+    if (overwrite) {
       // Create backup
       const backupPath = path.join(__dirname, '.env.backup');
       await fs.copyFile(envPath, backupPath);
-      console.log(`✅ Current .env backed up to .env.backup`);
+      console.log('✅ Current .env backed up to .env.backup');
       shouldWrite = true;
+    } else {
+      shouldWrite = false;
     }
   } catch (error) {
     // .env doesn't exist, safe to create
@@ -172,12 +164,11 @@ DELETE_LINKS=${config.DELETE_LINKS}
     console.log('\n✅ .env file created successfully!');
   } else {
     console.log('\n❌ Setup cancelled. .env file was not modified.');
+    return config;
   }
 
-  // Create directories if they don't exist
-  console.log('\n' + '━'.repeat(60));
-  console.log('📂 CREATING DIRECTORIES');
-  console.log('━'.repeat(60));
+  // Create directories
+  console.log('\n📂 Creating directories...');
 
   try {
     const notesPath = path.resolve(__dirname, config.OBSIDIAN_NOTES_PATH);
@@ -212,18 +203,15 @@ DELETE_LINKS=${config.DELETE_LINKS}
   console.log('  2. Run the converter: npm start');
   console.log('  3. Check the output in:', config.OUTPUT_PATH);
 
-  if (config.USE_MOCK_GEMINI === 'true' && !useMockGemini) {
-    console.log('\n⚠️  Note: Running in MOCK mode. For better results, add a Gemini API key.');
-  }
-
   console.log('\n✨ Happy converting!\n');
 
-  rl.close();
+  return config;
 }
 
-// Run setup
-setup().catch(error => {
-  console.error('\n❌ Setup error:', error.message);
-  rl.close();
-  process.exit(1);
-});
+// Run setup if called directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runSetup().catch(error => {
+    console.error('\n❌ Setup error:', error.message);
+    process.exit(1);
+  });
+}
