@@ -15,6 +15,24 @@ Convert Obsidian notes containing URLs into full-length Markdown articles using 
 - ✅ Converts YouTube and Instagram URLs (coming soon)
 - ✅ Mock mode for testing without API key
 - ✅ Batch processing of multiple notes
+- ✅ **Interactive setup wizard** - easy configuration with guided prompts
+
+## Quick Start
+
+Get started in 3 simple steps:
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Run the interactive setup wizard
+npm run setup
+
+# 3. Add your notes and start converting
+npm start
+```
+
+The setup wizard will guide you through all configuration options!
 
 ## Installation
 
@@ -28,12 +46,23 @@ cd obsidian-to-article
 npm install
 ```
 
-3. Set up environment variables:
+3. Run the interactive setup wizard:
+```bash
+npm run setup
+```
+
+The setup wizard will guide you through:
+- Configuring Gemini API (mock or real)
+- Setting up Twitter API (optional)
+- Choosing input/output directories
+- Enabling/disabling dry-run and auto-cleanup features
+
+**Alternative:** Manual setup by copying `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
 
-4. Edit `.env` file with your configuration:
+Then edit `.env` file with your configuration:
 ```env
 # For testing with mock Gemini (no API key needed)
 USE_MOCK_GEMINI=true
