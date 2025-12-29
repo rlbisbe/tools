@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
  */
 class MockGeminiService {
   async convertHtmlToMarkdown(html, url) {
-    console.log('🧪 Using MOCK Gemini service');
+    console.log('Using MOCK Gemini service');
     const totalStart = Date.now();
 
     const parseStart = Date.now();
@@ -74,7 +74,7 @@ class MockGeminiService {
 
     const processTime = Date.now() - processStart;
     const totalTime = Date.now() - totalStart;
-    console.log(`  📊 Mock processing complete (parse: ${parseTime}ms, process: ${processTime}ms) | Total: ${totalTime}ms | Input: ${html.length} chars, Output: ${markdown.length} chars`);
+    console.log(`Mock processing complete (parse: ${parseTime}ms, process: ${processTime}ms) | Total: ${totalTime}ms | Input: ${html.length} chars, Output: ${markdown.length} chars`);
 
     return markdown;
   }
@@ -91,7 +91,7 @@ class GeminiService {
   }
 
   async convertHtmlToMarkdown(html, url) {
-    console.log('🤖 Using real Gemini API');
+    console.log('Using real Gemini API');
     const totalStart = Date.now();
 
     try {
@@ -106,7 +106,7 @@ ${html.length > 50000 ? html.substring(0, 50000) + '\n\n[HTML truncated - too la
 
 Return only clean Markdown:`;
       const promptTime = Date.now() - promptStart;
-      console.log(`  📝 Prompt prepared (${promptTime}ms, ${html.length} chars HTML)`);
+      console.log(`Prompt prepared (${promptTime}ms, ${html.length} chars HTML)`);
 
       const apiStart = Date.now();
       const response = await axios.post(
@@ -126,7 +126,7 @@ Return only clean Markdown:`;
         }
       );
       const apiTime = Date.now() - apiStart;
-      console.log(`  🌐 API call complete (${apiTime}ms)`);
+      console.log(`API call complete (${apiTime}ms)`);
 
       // Extract the generated text from Gemini's response
       const parseStart = Date.now();
@@ -138,7 +138,7 @@ Return only clean Markdown:`;
       const parseTime = Date.now() - parseStart;
       const totalTime = Date.now() - totalStart;
       
-      console.log(`  📊 Response parsed (${parseTime}ms) | Total: ${totalTime}ms | Output: ${generatedText.length} chars`);
+      console.log(`Response parsed (${parseTime}ms) | Total: ${totalTime}ms | Output: ${generatedText.length} chars`);
 
       return generatedText;
 

@@ -27,7 +27,7 @@ const config = {
  * Process a single Obsidian note file
  */
 async function processNote(filePath, geminiService, twitterService) {
-  console.log(`\n📄 Processing: ${path.basename(filePath)}`);
+  console.log(`\nProcessing: ${path.basename(filePath)}`);
   const fileStart = Date.now();
 
   try {
@@ -39,12 +39,12 @@ async function processNote(filePath, geminiService, twitterService) {
     const urls = extractUrls(content);
 
     if (urls.length === 0) {
-      console.log('  ⚠️  No URLs found in this note');
+      console.log('  No URLs found in this note');
       return;
     }
 
     if (urls.length > 1) {
-      console.log(`  ⚠️  Skipping note with ${urls.length} URLs (only processing single-URL notes)`);
+      console.log(`  Skipping note with ${urls.length} URLs (only processing single-URL notes)`);
       return;
     }
 
@@ -60,13 +60,13 @@ async function processNote(filePath, geminiService, twitterService) {
 
     // Check if URL should be ignored
     if (shouldIgnoreUrl(url)) {
-      console.log(`  ⏭️  Skipping (ignored domain): ${url}`);
+      console.log(`  Skipping (ignored domain): ${url}`);
       return;
     }
 
     // Skip image files
     if (url.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/i)) {
-      console.log(`  ⏭️  Skipping image file: ${url}`);
+      console.log(`  Skipping image file: ${url}`);
       return;
     }
 
@@ -76,7 +76,7 @@ async function processNote(filePath, geminiService, twitterService) {
       // Handle Twitter URLs separately
       if (isTwitterUrl(url)) {
         if (!twitterService) {
-          console.log(`  ⚠️  Skipping Twitter URL (no API token): ${url}`);
+          console.log(`  Skipping Twitter URL (no API token): ${url}`);
           return;
         }
 
@@ -84,7 +84,7 @@ async function processNote(filePath, geminiService, twitterService) {
         const twitterStart = Date.now();
         markdown = await twitterService.urlToMarkdown(url);
         const twitterTime = Date.now() - twitterStart;
-        console.log(`  ✅ Twitter processing complete (${twitterTime}ms)`);
+        console.log(`  Twitter processing complete (${twitterTime}ms)`);
 
       } else {
         // Regular web article - fetch and convert with Gemini
@@ -92,11 +92,11 @@ async function processNote(filePath, geminiService, twitterService) {
         const html = await fetchUrlContent(url);
         const fetchTime = Date.now() - fetchStart;
 
-        console.log(`  🔄 Converting to Markdown... (fetch: ${fetchTime}ms)`);
+        console.log(`  Converting to Markdown... (fetch: ${fetchTime}ms)`);
         const geminiStart = Date.now();
         markdown = await geminiService.convertHtmlToMarkdown(html, url);
         const geminiTime = Date.now() - geminiStart;
-        console.log(`  ✅ Conversion complete (gemini: ${geminiTime}ms)`);
+        console.log(`  Conversion complete (gemini: ${geminiTime}ms)`);
       }
 
       // Replace URL with markdown content in-place
@@ -117,18 +117,18 @@ async function processNote(filePath, geminiService, twitterService) {
       }
 
       replacementCount = 1;
-      console.log(`  ✅ Replaced URL with content`);
+      console.log(`  Replaced URL with content`);
 
     } catch (error) {
-      console.error(`  ❌ Failed to process ${url}:`, error.message);
+      console.error(`  Failed to process ${url}:`, error.message);
       return;
     }
 
     // Save modified content back to file
     if (replacementCount > 0) {
       if (config.dryRun) {
-        console.log(`  🔍 [DRY RUN] Would replace the URL in file`);
-        console.log('  📋 Preview (first 500 chars):');
+        console.log(`  [DRY RUN] Would replace the URL in file`);
+        console.log('  Preview (first 500 chars):');
         console.log('  ' + '─'.repeat(50));
         console.log(modifiedContent.substring(0, 500).split('\n').map(line => `  ${line}`).join('\n'));
         if (modifiedContent.length > 500) {
@@ -137,15 +137,15 @@ async function processNote(filePath, geminiService, twitterService) {
         console.log('  ' + '─'.repeat(50));
       } else {
         await fs.writeFile(filePath, modifiedContent, 'utf-8');
-        console.log(`  💾 Updated file with expanded URL`);
+        console.log(`  Updated file with expanded URL`);
       }
     }
 
     const fileTime = Date.now() - fileStart;
-    console.log(`  ⏱️  File processing complete (${fileTime}ms total)`);
+    console.log(`  File processing complete (${fileTime}ms total)`);
 
   } catch (error) {
-    console.error(`  ❌ Error processing file:`, error.message);
+    console.error(`  Error processing file:`, error.message);
   }
 }
 
@@ -153,11 +153,11 @@ async function processNote(filePath, geminiService, twitterService) {
  * Main function
  */
 async function main() {
-  console.log('🚀 Obsidian to Article Converter\n');
+  console.log('Obsidian to Article Converter\n');
 
   // Validate configuration
   if (!config.useMockGemini && !config.geminiApiKey) {
-    console.error('❌ Error: GEMINI_API_KEY is required when USE_MOCK_GEMINI is not true');
+    console.error('Error: GEMINI_API_KEY is required when USE_MOCK_GEMINI is not true');
     console.error('Please set up your .env file (see .env.example)');
     process.exit(1);
   }
@@ -168,16 +168,16 @@ async function main() {
   // Create Twitter service (optional)
   const twitterService = createTwitterService(config.twitterBearerToken);
 
-  console.log(`📁 Notes path: ${config.notesPath}`);
-  console.log(`🤖 Using ${config.useMockGemini ? 'MOCK' : 'REAL'} Gemini service`);
-  console.log(`🐦 Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}`);
-  console.log(`🔍 Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}\n`);
+  console.log(`Notes path: ${config.notesPath}`);
+  console.log(`Using ${config.useMockGemini ? 'MOCK' : 'REAL'} Gemini service`);
+  console.log(`Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}`);
+  console.log(`Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}\n`);
 
   // Check if notes directory exists
   try {
     await fs.access(config.notesPath);
   } catch (error) {
-    console.error(`❌ Error: Notes directory not found: ${config.notesPath}`);
+    console.error(`Error: Notes directory not found: ${config.notesPath}`);
     console.error('Please create the directory and add your Obsidian notes');
     process.exit(1);
   }
@@ -191,7 +191,7 @@ async function main() {
   );
 
   if (markdownFiles.length === 0) {
-    console.log('⚠️  No markdown files found in notes directory');
+    console.log('No markdown files found in notes directory');
     return;
   }
 
@@ -205,11 +205,11 @@ async function main() {
   }
 
   console.log('\n' + '='.repeat(50));
-  console.log('✨ Done!');
+  console.log('Done!');
 }
 
 // Run the script
 main().catch(error => {
-  console.error('❌ Fatal error:', error);
+  console.error('Fatal error:', error);
   process.exit(1);
 });
