@@ -155,6 +155,17 @@ Return only clean Markdown:`;
       // Execute the CLI tool with the prompt
       // Use stdin for prompts to avoid command-line length limits
       const command = this.getToolCommand();
+
+      await logger.debug(`Executing ${toolName} CLI command`, {
+        command,
+        promptLength: prompt.length,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(colors.dim(`Executing: ${command}`));
+      console.log(colors.dim(`Prompt size: ${prompt.length} chars (${(prompt.length / 1024).toFixed(2)} KB)`));
+      console.log(colors.dim(`Waiting for ${toolName} CLI response...`));
+
       const { stdout, stderr } = await execAsync(command, {
         input: prompt,  // Pass prompt via stdin
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
@@ -212,20 +223,45 @@ Return only clean Markdown:`;
       const totalTime = Date.now() - totalStart;
       const toolName = this.toolType.toUpperCase();
 
-      await logger.error(`${toolName} CLI error`, {
+      // Detailed error logging
+      const errorDetails = {
         url,
         error: error.message,
         code: error.code,
-        stdout: error.stdout,
-        stderr: error.stderr,
+        signal: error.signal,
+        killed: error.killed,
+        stdout: error.stdout?.substring(0, 1000), // First 1000 chars
+        stderr: error.stderr?.substring(0, 1000), // First 1000 chars
         totalTime,
-        toolType: this.toolType
-      });
+        toolType: this.toolType,
+        command: this.getToolCommand(),
+        timestamp: new Date().toISOString()
+      };
 
-      console.log(colors.error(`Error calling ${toolName} CLI: ${error.message}`));
-      if (error.stderr) {
-        console.log(colors.error(`CLI stderr: ${error.stderr}`));
+      await logger.error(`${toolName} CLI error`, errorDetails);
+
+      console.log(colors.error(`\n❌ Error calling ${toolName} CLI:`));
+      console.log(colors.error(`   Message: ${error.message}`));
+      console.log(colors.error(`   Code: ${error.code || 'N/A'}`));
+      console.log(colors.error(`   Signal: ${error.signal || 'N/A'}`));
+      console.log(colors.error(`   Killed: ${error.killed || false}`));
+      console.log(colors.error(`   Time elapsed: ${totalTime}ms`));
+
+      if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+        console.log(colors.error(`   This error indicates output exceeded maxBuffer (10MB)`));
+      } else if (error.signal === 'SIGTERM' || error.killed) {
+        console.log(colors.error(`   This error indicates the process was killed (timeout: 120s)`));
       }
+
+      if (error.stderr) {
+        console.log(colors.error(`\n   CLI stderr (first 500 chars):`));
+        console.log(colors.error(`   ${error.stderr.substring(0, 500)}`));
+      }
+      if (error.stdout) {
+        console.log(colors.error(`\n   CLI stdout (first 500 chars):`));
+        console.log(colors.error(`   ${error.stdout.substring(0, 500)}`));
+      }
+
       throw error;
     }
   }
