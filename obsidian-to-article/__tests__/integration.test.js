@@ -82,7 +82,7 @@ YouTube video: https://youtube.com/watch?v=abc123
     const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com/test');
 
     expect(markdown).toBeTruthy();
-    expect(markdown).toContain('https://example.com/test');
+    expect(markdown).toContain('Test Article Title');
   });
 
   test('Service factory functions', async () => {

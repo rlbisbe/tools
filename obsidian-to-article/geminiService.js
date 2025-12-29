@@ -24,7 +24,6 @@ class MockGeminiService {
 
     // Build markdown
     let markdown = `# ${title}\n\n`;
-    markdown += `**Source:** ${url}\n\n---\n\n`;
 
     // Extract paragraphs and headings
     contentArea.find('h1, h2, h3, h4, h5, h6, p, ul, ol, blockquote').each((i, elem) => {

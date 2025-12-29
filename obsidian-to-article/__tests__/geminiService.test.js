@@ -74,8 +74,8 @@ describe('GeminiService', () => {
       const markdown = await service.convertHtmlToMarkdown(html, url);
 
       expect(markdown).toBeTruthy();
-      expect(markdown).toContain(url);
-      // Mock Gemini service should process the HTML and include source
+      expect(markdown).toContain('Test Title');
+      // Mock Gemini service should process the HTML
       expect(typeof markdown).toBe('string');
       expect(markdown.length).toBeGreaterThan(0);
     });
@@ -86,8 +86,8 @@ describe('GeminiService', () => {
 
       const markdown = await service.convertHtmlToMarkdown(html, url);
 
-      expect(markdown).toContain(url);
-      expect(markdown).toContain('**Source:**');
+      expect(markdown).toContain('Untitled Article');
+      expect(markdown).toContain('Content');
     });
   });
 
