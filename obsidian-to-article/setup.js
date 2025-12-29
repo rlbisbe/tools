@@ -66,10 +66,24 @@ export function getSetupQuestions() {
       type: 'input',
       name: 'cliCommand',
       message: (answers) => {
-        const toolName = answers.cliToolType || 'gemini';
-        return `💡 Enter the ${toolName} CLI command (e.g., "${toolName}" or "/path/to/${toolName}"):`;
+        const toolType = answers.cliToolType || 'gemini';
+        const examples = {
+          'gemini': 'gemini',
+          'kiro': 'kiro-cli',
+          'claude': 'claude'
+        };
+        const example = examples[toolType];
+        return `💡 Enter the ${toolType} CLI command (e.g., "${example}" or "/path/to/${example}"):`;
       },
-      default: (answers) => answers.cliToolType || 'gemini',
+      default: (answers) => {
+        const toolType = answers.cliToolType || 'gemini';
+        const defaults = {
+          'gemini': 'gemini',
+          'kiro': 'kiro-cli',
+          'claude': 'claude'
+        };
+        return defaults[toolType];
+      },
       when: (answers) => !answers.useMockGemini,
       validate: (input) => {
         if (!input || input.trim() === '') {
