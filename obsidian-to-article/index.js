@@ -28,6 +28,7 @@ const config = {
  */
 async function processNote(filePath, geminiService, twitterService) {
   console.log(`\n📄 Processing: ${path.basename(filePath)}`);
+  const fileStart = Date.now();
 
   try {
     // Read the note content
@@ -55,6 +56,12 @@ async function processNote(filePath, geminiService, twitterService) {
         continue;
       }
 
+      // Skip image files
+      if (url.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/i)) {
+        console.log(`  ⏭️  Skipping image file: ${url}`);
+        continue;
+      }
+
       try {
         let markdown;
 
@@ -66,14 +73,22 @@ async function processNote(filePath, geminiService, twitterService) {
           }
 
           // Use Twitter service to extract tweet/thread
+          const twitterStart = Date.now();
           markdown = await twitterService.urlToMarkdown(url);
+          const twitterTime = Date.now() - twitterStart;
+          console.log(`  ✅ Twitter processing complete (${twitterTime}ms)`);
 
         } else {
           // Regular web article - fetch and convert with Gemini
+          const fetchStart = Date.now();
           const html = await fetchUrlContent(url);
+          const fetchTime = Date.now() - fetchStart;
 
-          console.log('  🔄 Converting to Markdown...');
+          console.log(`  🔄 Converting to Markdown... (fetch: ${fetchTime}ms)`);
+          const geminiStart = Date.now();
           markdown = await geminiService.convertHtmlToMarkdown(html, url);
+          const geminiTime = Date.now() - geminiStart;
+          console.log(`  ✅ Conversion complete (gemini: ${geminiTime}ms)`);
         }
 
         // Replace URL with markdown content in-place
@@ -117,6 +132,9 @@ async function processNote(filePath, geminiService, twitterService) {
         console.log(`  💾 Updated file with ${replacementCount} expanded URL(s)`);
       }
     }
+
+    const fileTime = Date.now() - fileStart;
+    console.log(`  ⏱️  File processing complete (${fileTime}ms total)`);
 
   } catch (error) {
     console.error(`  ❌ Error processing file:`, error.message);
