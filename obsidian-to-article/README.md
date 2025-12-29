@@ -9,9 +9,9 @@ Convert Obsidian notes containing URLs into full-length Markdown articles using 
 - ✅ **Intelligently extracts core article content** using Gemini API
 - ✅ Removes ads, navigation, sidebars, and page clutter
 - ✅ Preserves article structure, code blocks, images, and links
+- ✅ **In-place URL replacement** - replaces URLs with full content directly in source files
 - ✅ **Twitter/X integration** - extracts tweets and threads using Twitter API
 - ✅ **Dry-run mode** - preview results without writing files
-- ✅ **Auto-cleanup** - optionally remove processed links from source files
 - ✅ Converts YouTube and Instagram URLs (coming soon)
 - ✅ Mock mode for testing without API key
 - ✅ Batch processing of multiple notes
@@ -114,8 +114,7 @@ obsidian-to-article/
 ├── package.json          # Dependencies
 ├── .env.example          # Environment variables template
 ├── .env                  # Your environment variables (create this)
-├── notes/                # Input: Place your Obsidian notes here
-└── output/               # Output: Generated articles will be saved here
+└── notes/                # Input: Place your Obsidian notes here
 ```
 
 ## Usage
@@ -144,7 +143,7 @@ Or directly:
 node index.js
 ```
 
-4. Check the `output` directory for generated Markdown articles.
+4. Check your notes - the URLs will be replaced with full article content directly in your source files.
 
 ## How It Works
 
@@ -157,7 +156,7 @@ node index.js
    - **YouTube/Instagram**: Currently skipped (coming soon)
 5. **Extracts Core Content**: Removes navigation, ads, sidebars, and other clutter
 6. **Converts to Markdown**: Transforms the clean content into well-formatted Markdown
-7. **Saves Articles**: Stores the result in the `output` directory
+7. **Replaces In-Place**: Replaces URLs with expanded content directly in the source files
 
 ## Supported Platforms
 
@@ -196,24 +195,15 @@ You can customize the behavior via `.env` file:
 | `USE_MOCK_GEMINI` | Use mock service instead of real API | `true` |
 | `TWITTER_BEARER_TOKEN` | Your Twitter API Bearer Token (optional) | - |
 | `OBSIDIAN_NOTES_PATH` | Directory containing your notes | `./notes` |
-| `OUTPUT_PATH` | Directory for generated articles | `./output` |
-| `DRY_RUN` | Preview results without writing files or modifying source | `false` |
-| `DELETE_LINKS` | Remove processed links from source files | `true` |
+| `DRY_RUN` | Preview results without modifying files | `false` |
 
 ### Advanced Features
 
 **Dry-Run Mode** (`DRY_RUN=true`)
-- Preview what would be converted without actually writing files
+- Preview what would be converted without actually modifying files
 - Shows the first 500 characters of each converted article
 - Doesn't modify source files
 - Useful for testing before committing to conversions
-
-**Auto-Cleanup** (`DELETE_LINKS=true`, enabled by default)
-- Automatically removes processed URLs from source Obsidian notes
-- Keeps your notes clean after articles are converted
-- Removes both plain URLs and markdown-style links
-- Set to `false` to keep original URLs in source files
-- Skipped when in dry-run mode
 
 ## Example
 
@@ -230,11 +220,42 @@ Great Twitter thread: https://twitter.com/username/status/1234567890
 This YouTube video is cool: https://youtube.com/watch?v=xyz
 ```
 
-**Output**:
-- `output/article.md` - Markdown version of example.com/article
-- `output/twitter-1234567890.md` - Formatted Twitter thread (if API token provided)
-- `output/another-article.md` - Markdown version of example.com/another-article
-- YouTube link is ignored (coming soon)
+**After Processing** (`notes/article.md`):
+```markdown
+# Interesting Reads
+
+Check this out: 
+
+---
+
+# Article Content
+
+[Full article content from example.com/article]
+
+---
+
+Great Twitter thread: 
+
+---
+
+# Twitter Thread
+
+[Formatted Twitter thread content]
+
+---
+
+---
+
+# Another great read
+
+[Full article content from example.com/another-article]
+
+---
+
+This YouTube video is cool: https://youtube.com/watch?v=xyz
+```
+
+Note: YouTube link remains unchanged (coming soon)
 
 ## Development & Testing
 
