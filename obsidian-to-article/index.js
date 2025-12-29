@@ -11,6 +11,7 @@ import {
   isTwitterUrl,
   fetchUrlContent
 } from './utils.js';
+import { logger, logSuccess, logError, logWarning, logInfo, logBold, colors } from './logger.js';
 
 // Load environment variables
 dotenv.config();
@@ -27,8 +28,13 @@ const config = {
  * Process a single Obsidian note file
  */
 async function processNote(filePath, geminiService, twitterService) {
-  console.log(`\nProcessing: ${path.basename(filePath)}`);
+  console.log(`\n${colors.bold('Processing:')} ${colors.magenta(path.basename(filePath))}`);
   const fileStart = Date.now();
+
+  await logger.info('Starting file processing', {
+    file: path.basename(filePath),
+    fullPath: filePath
+  });
 
   try {
     // Read the note content
@@ -39,22 +45,30 @@ async function processNote(filePath, geminiService, twitterService) {
     const urls = extractUrls(content);
 
     if (urls.length === 0) {
-      console.log('  No URLs found in this note');
+      logWarning('  No URLs found in this note');
       return;
     }
 
     if (urls.length > 1) {
-      console.log(`  Skipping note with ${urls.length} URLs (only processing single-URL notes)`);
+      logWarning(`  Skipping note with ${urls.length} URLs (only processing single-URL notes)`);
+      await logger.info('Skipped multi-URL note', {
+        file: path.basename(filePath),
+        urlCount: urls.length,
+        urls
+      });
       return;
     }
 
     // Check if note already contains processed content
     if (content.includes('**Source:**') || content.includes('---\n\n# ')) {
-      console.log('  Skipping note that already contains processed content');
+      logWarning('  Skipping note that already contains processed content');
+      await logger.info('Skipped already processed note', {
+        file: path.basename(filePath)
+      });
       return;
     }
 
-    console.log(`  Found 1 URL: ${urls[0]}`);
+    logInfo(`  Found 1 URL: ${colors.cyan(urls[0])}`);
 
     let modifiedContent = content;
     let replacementCount = 0;
@@ -64,13 +78,13 @@ async function processNote(filePath, geminiService, twitterService) {
 
     // Check if URL should be ignored
     if (shouldIgnoreUrl(url)) {
-      console.log(`  Skipping (ignored domain): ${url}`);
+      logWarning(`  Skipping (ignored domain): ${url}`);
       return;
     }
 
     // Skip image files
     if (url.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/i)) {
-      console.log(`  Skipping image file: ${url}`);
+      logWarning(`  Skipping image file: ${url}`);
       return;
     }
 
@@ -80,7 +94,7 @@ async function processNote(filePath, geminiService, twitterService) {
       // Handle Twitter URLs separately
       if (isTwitterUrl(url)) {
         if (!twitterService) {
-          console.log(`  Skipping Twitter URL (no API token): ${url}`);
+          logWarning(`  Skipping Twitter URL (no API token): ${url}`);
           return;
         }
 
@@ -88,7 +102,7 @@ async function processNote(filePath, geminiService, twitterService) {
         const twitterStart = Date.now();
         markdown = await twitterService.urlToMarkdown(url);
         const twitterTime = Date.now() - twitterStart;
-        console.log(`  Twitter processing complete (${twitterTime}ms)`);
+        logSuccess(`  Twitter processing complete (${twitterTime}ms)`);
 
       } else {
         // Regular web article - fetch and convert with Gemini
@@ -96,11 +110,11 @@ async function processNote(filePath, geminiService, twitterService) {
         const html = await fetchUrlContent(url);
         const fetchTime = Date.now() - fetchStart;
 
-        console.log(`  Converting to Markdown... (fetch: ${fetchTime}ms)`);
+        console.log(colors.cyan(`  Converting to Markdown... (fetch: ${fetchTime}ms)`));
         const geminiStart = Date.now();
         markdown = await geminiService.convertHtmlToMarkdown(html, url);
         const geminiTime = Date.now() - geminiStart;
-        console.log(`  Conversion complete (gemini: ${geminiTime}ms)`);
+        logSuccess(`  Conversion complete (gemini: ${geminiTime}ms)`);
       }
 
       // Replace URL with markdown content in-place
@@ -121,17 +135,23 @@ async function processNote(filePath, geminiService, twitterService) {
       }
 
       replacementCount = 1;
-      console.log(`  Replaced URL with content`);
+      logSuccess(`  Replaced URL with content`);
 
     } catch (error) {
-      console.error(`  Failed to process ${url}:`, error.message);
+      logError(`  Failed to process ${url}: ${error.message}`);
+      await logger.error('URL processing failed', {
+        file: path.basename(filePath),
+        url,
+        error: error.message,
+        stack: error.stack
+      });
       return;
     }
 
     // Save modified content back to file
     if (replacementCount > 0) {
       if (config.dryRun) {
-        console.log(`  [DRY RUN] Would replace the URL in file`);
+        logInfo(`  [DRY RUN] Would replace the URL in file`);
         console.log('  Preview (first 500 chars):');
         console.log('  ' + '─'.repeat(50));
         console.log(modifiedContent.substring(0, 500).split('\n').map(line => `  ${line}`).join('\n'));
@@ -141,15 +161,26 @@ async function processNote(filePath, geminiService, twitterService) {
         console.log('  ' + '─'.repeat(50));
       } else {
         await fs.writeFile(filePath, modifiedContent, 'utf-8');
-        console.log(`  Updated file with expanded URL`);
+        logSuccess(`  Updated file with expanded URL`);
       }
     }
 
     const fileTime = Date.now() - fileStart;
-    console.log(`  File processing complete (${fileTime}ms total)`);
+    console.log(colors.dim(`  File processing complete (${fileTime}ms total)`));
+
+    await logger.info('File processing complete', {
+      file: path.basename(filePath),
+      totalTime: fileTime,
+      success: replacementCount > 0
+    });
 
   } catch (error) {
-    console.error(`  Error processing file:`, error.message);
+    logError(`  Error processing file: ${error.message}`);
+    await logger.error('File processing error', {
+      file: path.basename(filePath),
+      error: error.message,
+      stack: error.stack
+    });
   }
 }
 
@@ -157,12 +188,12 @@ async function processNote(filePath, geminiService, twitterService) {
  * Main function
  */
 async function main() {
-  console.log('Obsidian to Article Converter\n');
+  logBold('Obsidian to Article Converter\n');
 
   // Validate configuration
   if (!config.useMockGemini && !config.geminiApiKey) {
-    console.error('Error: GEMINI_API_KEY is required when USE_MOCK_GEMINI is not true');
-    console.error('Please set up your .env file (see .env.example)');
+    logError('Error: GEMINI_API_KEY is required when USE_MOCK_GEMINI is not true');
+    logError('Please set up your .env file (see .env.example)');
     process.exit(1);
   }
 
@@ -172,10 +203,10 @@ async function main() {
   // Create Twitter service (optional)
   const twitterService = createTwitterService(config.twitterBearerToken);
 
-  console.log(`Notes path: ${config.notesPath}`);
-  console.log(`Using ${config.useMockGemini ? 'MOCK' : 'REAL'} Gemini service`);
-  console.log(`Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}`);
-  console.log(`Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}\n`);
+  logInfo(`Notes path: ${config.notesPath}`);
+  logInfo(`Using ${config.useMockGemini ? 'MOCK' : 'REAL'} Gemini service`);
+  logInfo(`Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}`);
+  logInfo(`Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}\n`);
 
   // Check if notes directory exists
   try {
@@ -208,8 +239,7 @@ async function main() {
     await processNote(filePath, geminiService, twitterService);
   }
 
-  console.log('\n' + '='.repeat(50));
-  console.log('Done!');
+  logSuccess('\nDone!');
 }
 
 // Run the script

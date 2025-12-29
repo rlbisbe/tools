@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { colors } from './logger.js';
 
 /**
  * Extract URLs from Obsidian note content
@@ -73,7 +74,7 @@ export function shouldIgnoreUrl(url) {
  */
 export async function fetchUrlContent(url) {
   try {
-    console.log(`Fetching: ${url}`);
+    console.log(colors.dim(`Fetching: ${url}`));
 
     const response = await axios.get(url, {
       headers: {
@@ -86,7 +87,7 @@ export async function fetchUrlContent(url) {
     return response.data;
 
   } catch (error) {
-    console.error(`Error fetching ${url}:`, error.message);
+    console.log(colors.error(`Error fetching ${url}: ${error.message}`));
     throw error;
   }
 }
