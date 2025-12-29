@@ -103,13 +103,13 @@ async function processNote(filePath, geminiService, twitterService) {
       // Replace markdown-style links first
       const markdownLinkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, 'g');
       const markdownReplaced = modifiedContent.replace(markdownLinkRegex, (match, linkText) => {
-        return `\n\n---\n\n# ${linkText}\n\n${markdown}\n\n---\n\n`;
+        return `\n\n---\n\n# ${linkText}\n\n${markdown}\n\n**Source:** ${url}\n\n---\n\n`;
       });
 
       // If no markdown link was found, replace plain URL
       if (markdownReplaced === modifiedContent) {
         modifiedContent = modifiedContent.replace(new RegExp(escapedUrl, 'g'), 
-          `\n\n---\n\n# Article Content\n\n${markdown}\n\n---\n\n`);
+          `\n\n---\n\n# Article Content\n\n${markdown}\n\n**Source:** ${url}\n\n---\n\n`);
       } else {
         modifiedContent = markdownReplaced;
       }
