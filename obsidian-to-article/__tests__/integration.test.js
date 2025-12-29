@@ -93,9 +93,9 @@ YouTube video: https://youtube.com/watch?v=abc123
     const mockGemini = createGeminiService(true);
     expect(mockGemini).toBeDefined();
 
-    expect(() => createGeminiService(false)).toThrow();
+    expect(() => createGeminiService(false, '')).toThrow();
 
-    const realGemini = createGeminiService(false, 'test-key');
+    const realGemini = createGeminiService(false, 'gemini');
     expect(realGemini).toBeDefined();
 
     // Test Twitter service creation

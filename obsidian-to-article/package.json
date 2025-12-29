@@ -1,7 +1,7 @@
 {
   "name": "obsidian-to-article",
   "version": "1.0.0",
-  "description": "Convert Obsidian notes with URLs into full-length articles using Gemini API",
+  "description": "Convert Obsidian notes with URLs into full-length articles using Gemini CLI tool",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -21,7 +21,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.2",
     "chalk": "^5.6.2",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.3.1",

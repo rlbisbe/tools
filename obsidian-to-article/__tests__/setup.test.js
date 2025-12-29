@@ -44,7 +44,7 @@ describe('Setup Wizard', () => {
   describe('generateEnvContent', () => {
     test('generates correct .env content with all options', () => {
       const config = {
-        GEMINI_API_KEY: 'test-api-key',
+        GEMINI_CLI_COMMAND: 'gemini',
         USE_MOCK_GEMINI: 'false',
         TWITTER_BEARER_TOKEN: 'test-bearer-token',
         OBSIDIAN_NOTES_PATH: './my-notes',
@@ -55,7 +55,7 @@ describe('Setup Wizard', () => {
 
       const envContent = generateEnvContent(config);
 
-      expect(envContent).toContain('GEMINI_API_KEY=test-api-key');
+      expect(envContent).toContain('GEMINI_CLI_COMMAND=gemini');
       expect(envContent).toContain('USE_MOCK_GEMINI=false');
       expect(envContent).toContain('TWITTER_BEARER_TOKEN=test-bearer-token');
       expect(envContent).toContain('OBSIDIAN_NOTES_PATH=./my-notes');
@@ -66,7 +66,7 @@ describe('Setup Wizard', () => {
 
     test('generates content with mock Gemini', () => {
       const config = {
-        GEMINI_API_KEY: 'your_gemini_api_key_here',
+        GEMINI_CLI_COMMAND: 'gemini',
         USE_MOCK_GEMINI: 'true',
         TWITTER_BEARER_TOKEN: 'your_twitter_bearer_token_here',
         OBSIDIAN_NOTES_PATH: './notes',
@@ -78,7 +78,7 @@ describe('Setup Wizard', () => {
       const envContent = generateEnvContent(config);
 
       expect(envContent).toContain('USE_MOCK_GEMINI=true');
-      expect(envContent).toContain('GEMINI_API_KEY=your_gemini_api_key_here');
+      expect(envContent).toContain('GEMINI_CLI_COMMAND=gemini');
     });
   });
 
@@ -97,7 +97,7 @@ describe('Setup Wizard', () => {
 
       expect(config).toEqual({
         USE_MOCK_GEMINI: 'true',
-        GEMINI_API_KEY: 'your_gemini_api_key_here',
+        GEMINI_CLI_COMMAND: 'gemini',
         TWITTER_BEARER_TOKEN: 'your_twitter_bearer_token_here',
         OBSIDIAN_NOTES_PATH: './notes',
         OUTPUT_PATH: './output',
@@ -106,10 +106,10 @@ describe('Setup Wizard', () => {
       });
     });
 
-    test('converts answers to config with real Gemini API', () => {
+    test('converts answers to config with real Gemini CLI', () => {
       const answers = {
         useMockGemini: false,
-        geminiApiKey: 'real-api-key',
+        geminiCliCommand: '/usr/local/bin/gemini',
         useTwitter: true,
         twitterBearerToken: 'real-bearer-token',
         notesPath: './my-notes',
@@ -122,7 +122,7 @@ describe('Setup Wizard', () => {
 
       expect(config).toEqual({
         USE_MOCK_GEMINI: 'false',
-        GEMINI_API_KEY: 'real-api-key',
+        GEMINI_CLI_COMMAND: '/usr/local/bin/gemini',
         TWITTER_BEARER_TOKEN: 'real-bearer-token',
         OBSIDIAN_NOTES_PATH: './my-notes',
         OUTPUT_PATH: './my-output',
@@ -161,7 +161,7 @@ describe('Setup Wizard', () => {
       const questionNames = questions.map(q => q.name);
 
       expect(questionNames).toContain('useMockGemini');
-      expect(questionNames).toContain('geminiApiKey');
+      expect(questionNames).toContain('geminiCliCommand');
       expect(questionNames).toContain('useTwitter');
       expect(questionNames).toContain('twitterBearerToken');
       expect(questionNames).toContain('notesPath');
@@ -184,12 +184,12 @@ describe('Setup Wizard', () => {
       expect(questionMap.deleteLinks.default).toBe(true);
     });
 
-    test('geminiApiKey shown only when not using mock', () => {
+    test('geminiCliCommand shown only when not using mock', () => {
       const questions = getSetupQuestions();
-      const geminiKeyQuestion = questions.find(q => q.name === 'geminiApiKey');
+      const geminiCliQuestion = questions.find(q => q.name === 'geminiCliCommand');
 
-      expect(geminiKeyQuestion.when({ useMockGemini: true })).toBe(false);
-      expect(geminiKeyQuestion.when({ useMockGemini: false })).toBe(true);
+      expect(geminiCliQuestion.when({ useMockGemini: true })).toBe(false);
+      expect(geminiCliQuestion.when({ useMockGemini: false })).toBe(true);
     });
 
     test('twitterBearerToken shown only when using Twitter', () => {
@@ -200,14 +200,14 @@ describe('Setup Wizard', () => {
       expect(twitterQuestion.when({ useTwitter: true })).toBe(true);
     });
 
-    test('geminiApiKey has validation', () => {
+    test('geminiCliCommand has validation', () => {
       const questions = getSetupQuestions();
-      const geminiKeyQuestion = questions.find(q => q.name === 'geminiApiKey');
+      const geminiCliQuestion = questions.find(q => q.name === 'geminiCliCommand');
 
-      expect(typeof geminiKeyQuestion.validate).toBe('function');
-      expect(geminiKeyQuestion.validate('')).not.toBe(true);
-      expect(geminiKeyQuestion.validate('   ')).not.toBe(true);
-      expect(geminiKeyQuestion.validate('valid-key')).toBe(true);
+      expect(typeof geminiCliQuestion.validate).toBe('function');
+      expect(geminiCliQuestion.validate('')).not.toBe(true);
+      expect(geminiCliQuestion.validate('   ')).not.toBe(true);
+      expect(geminiCliQuestion.validate('gemini')).toBe(true);
     });
   });
 
@@ -255,10 +255,10 @@ describe('Setup Wizard', () => {
       }
     });
 
-    test('creates .env file with real API keys', async () => {
+    test('creates .env file with real CLI command', async () => {
       mockPromptResponses = {
         useMockGemini: false,
-        geminiApiKey: 'test-api-key-123',
+        geminiCliCommand: '/usr/local/bin/gemini',
         useTwitter: true,
         twitterBearerToken: 'test-bearer-456',
         notesPath: './custom-notes',
@@ -273,7 +273,7 @@ describe('Setup Wizard', () => {
       try {
         const config = await runSetup();
 
-        expect(config.GEMINI_API_KEY).toBe('test-api-key-123');
+        expect(config.GEMINI_CLI_COMMAND).toBe('/usr/local/bin/gemini');
         expect(config.TWITTER_BEARER_TOKEN).toBe('test-bearer-456');
         expect(config.USE_MOCK_GEMINI).toBe('false');
         expect(config.DRY_RUN).toBe('true');
@@ -355,7 +355,7 @@ describe('Setup Wizard', () => {
     test('full production setup', () => {
       const answers = {
         useMockGemini: false,
-        geminiApiKey: 'prod-api-key',
+        geminiCliCommand: '/usr/local/bin/gemini',
         useTwitter: true,
         twitterBearerToken: 'prod-bearer-token',
         notesPath: '/path/to/obsidian/notes',
@@ -367,7 +367,7 @@ describe('Setup Wizard', () => {
       const config = answersToConfig(answers);
 
       expect(config.USE_MOCK_GEMINI).toBe('false');
-      expect(config.GEMINI_API_KEY).toBe('prod-api-key');
+      expect(config.GEMINI_CLI_COMMAND).toBe('/usr/local/bin/gemini');
       expect(config.TWITTER_BEARER_TOKEN).toBe('prod-bearer-token');
       expect(config.OBSIDIAN_NOTES_PATH).toBe('/path/to/obsidian/notes');
       expect(config.OUTPUT_PATH).toBe('/path/to/output');

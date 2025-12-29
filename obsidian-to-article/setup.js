@@ -12,10 +12,11 @@ const __dirname = path.dirname(__filename);
  * Generate .env file content from config
  */
 export function generateEnvContent(config) {
-  return `# Gemini API Configuration
-GEMINI_API_KEY=${config.GEMINI_API_KEY}
+  return `# Gemini CLI Configuration
+# Command to invoke the Gemini CLI tool (default: 'gemini')
+GEMINI_CLI_COMMAND=${config.GEMINI_CLI_COMMAND}
 
-# Set to 'true' to use mock Gemini API (for testing without API key)
+# Set to 'true' to use mock Gemini service (for testing without CLI tool)
 USE_MOCK_GEMINI=${config.USE_MOCK_GEMINI}
 
 # Twitter API Configuration (optional - for Twitter/X URL support)
@@ -43,17 +44,18 @@ export function getSetupQuestions() {
     {
       type: 'confirm',
       name: 'useMockGemini',
-      message: 'Do you want to use MOCK Gemini service (no API key needed)?',
+      message: 'Do you want to use MOCK Gemini service (no CLI tool needed)?',
       default: true
     },
     {
       type: 'input',
-      name: 'geminiApiKey',
-      message: '💡 Enter your Gemini API key (get one at https://makersuite.google.com/app/apikey):',
+      name: 'geminiCliCommand',
+      message: '💡 Enter the Gemini CLI command (e.g., "gemini" or "/path/to/gemini"):',
+      default: 'gemini',
       when: (answers) => !answers.useMockGemini,
       validate: (input) => {
         if (!input || input.trim() === '') {
-          return 'API key is required when not using mock mode. Press Ctrl+C to cancel or enter a key.';
+          return 'CLI command is required when not using mock mode. Press Ctrl+C to cancel or enter a command.';
         }
         return true;
       }
@@ -103,9 +105,9 @@ export function getSetupQuestions() {
 export function answersToConfig(answers) {
   return {
     USE_MOCK_GEMINI: answers.useMockGemini ? 'true' : 'false',
-    GEMINI_API_KEY: answers.useMockGemini
-      ? 'your_gemini_api_key_here'
-      : (answers.geminiApiKey || 'your_gemini_api_key_here'),
+    GEMINI_CLI_COMMAND: answers.useMockGemini
+      ? 'gemini'
+      : (answers.geminiCliCommand || 'gemini'),
     TWITTER_BEARER_TOKEN: answers.twitterBearerToken || 'your_twitter_bearer_token_here',
     OBSIDIAN_NOTES_PATH: answers.notesPath,
     OUTPUT_PATH: answers.outputPath,
@@ -191,7 +193,7 @@ export async function runSetup() {
   console.log('🎉 SETUP COMPLETE!');
   console.log('━'.repeat(60));
   console.log('\n📋 Your configuration:');
-  console.log(`  • Gemini: ${config.USE_MOCK_GEMINI === 'true' ? 'MOCK mode' : 'REAL API'}`);
+  console.log(`  • Gemini: ${config.USE_MOCK_GEMINI === 'true' ? 'MOCK mode' : `CLI tool (${config.GEMINI_CLI_COMMAND})`}`);
   console.log(`  • Twitter: ${config.TWITTER_BEARER_TOKEN !== 'your_twitter_bearer_token_here' ? 'ENABLED' : 'DISABLED'}`);
   console.log(`  • Notes path: ${config.OBSIDIAN_NOTES_PATH}`);
   console.log(`  • Output path: ${config.OUTPUT_PATH}`);
