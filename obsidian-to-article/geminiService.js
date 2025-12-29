@@ -80,7 +80,7 @@ class MockGeminiService {
 class GeminiService {
   constructor(apiKey) {
     this.apiKey = apiKey;
-    this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+    this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
   }
 
   async convertHtmlToMarkdown(html, url) {
