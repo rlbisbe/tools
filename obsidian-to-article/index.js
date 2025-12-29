@@ -43,83 +43,91 @@ async function processNote(filePath, geminiService, twitterService) {
       return;
     }
 
-    console.log(`  Found ${urls.length} URL(s)`);
+    if (urls.length > 1) {
+      console.log(`  ⚠️  Skipping note with ${urls.length} URLs (only processing single-URL notes)`);
+      return;
+    }
+
+    console.log(`  Found 1 URL: ${urls[0]}`);
 
     let modifiedContent = content;
     let replacementCount = 0;
 
-    // Process each URL
-    for (const url of urls) {
-      // Check if URL should be ignored
-      if (shouldIgnoreUrl(url)) {
-        console.log(`  ⏭️  Skipping (ignored domain): ${url}`);
-        continue;
-      }
+    // Process the single URL
+    const url = urls[0];
+    // Process the single URL
+    const url = urls[0];
 
-      // Skip image files
-      if (url.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/i)) {
-        console.log(`  ⏭️  Skipping image file: ${url}`);
-        continue;
-      }
+    // Check if URL should be ignored
+    if (shouldIgnoreUrl(url)) {
+      console.log(`  ⏭️  Skipping (ignored domain): ${url}`);
+      return;
+    }
 
-      try {
-        let markdown;
+    // Skip image files
+    if (url.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/i)) {
+      console.log(`  ⏭️  Skipping image file: ${url}`);
+      return;
+    }
 
-        // Handle Twitter URLs separately
-        if (isTwitterUrl(url)) {
-          if (!twitterService) {
-            console.log(`  ⚠️  Skipping Twitter URL (no API token): ${url}`);
-            continue;
-          }
+    try {
+      let markdown;
 
-          // Use Twitter service to extract tweet/thread
-          const twitterStart = Date.now();
-          markdown = await twitterService.urlToMarkdown(url);
-          const twitterTime = Date.now() - twitterStart;
-          console.log(`  ✅ Twitter processing complete (${twitterTime}ms)`);
-
-        } else {
-          // Regular web article - fetch and convert with Gemini
-          const fetchStart = Date.now();
-          const html = await fetchUrlContent(url);
-          const fetchTime = Date.now() - fetchStart;
-
-          console.log(`  🔄 Converting to Markdown... (fetch: ${fetchTime}ms)`);
-          const geminiStart = Date.now();
-          markdown = await geminiService.convertHtmlToMarkdown(html, url);
-          const geminiTime = Date.now() - geminiStart;
-          console.log(`  ✅ Conversion complete (gemini: ${geminiTime}ms)`);
+      // Handle Twitter URLs separately
+      if (isTwitterUrl(url)) {
+        if (!twitterService) {
+          console.log(`  ⚠️  Skipping Twitter URL (no API token): ${url}`);
+          return;
         }
 
-        // Replace URL with markdown content in-place
-        const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        
-        // Replace markdown-style links first
-        const markdownLinkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, 'g');
-        const markdownReplaced = modifiedContent.replace(markdownLinkRegex, (match, linkText) => {
-          return `\n\n---\n\n# ${linkText}\n\n${markdown}\n\n---\n\n`;
-        });
+        // Use Twitter service to extract tweet/thread
+        const twitterStart = Date.now();
+        markdown = await twitterService.urlToMarkdown(url);
+        const twitterTime = Date.now() - twitterStart;
+        console.log(`  ✅ Twitter processing complete (${twitterTime}ms)`);
 
-        // If no markdown link was found, replace plain URL
-        if (markdownReplaced === modifiedContent) {
-          modifiedContent = modifiedContent.replace(new RegExp(escapedUrl, 'g'), 
-            `\n\n---\n\n# Article Content\n\n${markdown}\n\n---\n\n`);
-        } else {
-          modifiedContent = markdownReplaced;
-        }
+      } else {
+        // Regular web article - fetch and convert with Gemini
+        const fetchStart = Date.now();
+        const html = await fetchUrlContent(url);
+        const fetchTime = Date.now() - fetchStart;
 
-        replacementCount++;
-        console.log(`  ✅ Replaced URL with content`);
-
-      } catch (error) {
-        console.error(`  ❌ Failed to process ${url}:`, error.message);
+        console.log(`  🔄 Converting to Markdown... (fetch: ${fetchTime}ms)`);
+        const geminiStart = Date.now();
+        markdown = await geminiService.convertHtmlToMarkdown(html, url);
+        const geminiTime = Date.now() - geminiStart;
+        console.log(`  ✅ Conversion complete (gemini: ${geminiTime}ms)`);
       }
+
+      // Replace URL with markdown content in-place
+      const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // Replace markdown-style links first
+      const markdownLinkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, 'g');
+      const markdownReplaced = modifiedContent.replace(markdownLinkRegex, (match, linkText) => {
+        return `\n\n---\n\n# ${linkText}\n\n${markdown}\n\n---\n\n`;
+      });
+
+      // If no markdown link was found, replace plain URL
+      if (markdownReplaced === modifiedContent) {
+        modifiedContent = modifiedContent.replace(new RegExp(escapedUrl, 'g'), 
+          `\n\n---\n\n# Article Content\n\n${markdown}\n\n---\n\n`);
+      } else {
+        modifiedContent = markdownReplaced;
+      }
+
+      replacementCount = 1;
+      console.log(`  ✅ Replaced URL with content`);
+
+    } catch (error) {
+      console.error(`  ❌ Failed to process ${url}:`, error.message);
+      return;
     }
 
     // Save modified content back to file
     if (replacementCount > 0) {
       if (config.dryRun) {
-        console.log(`  🔍 [DRY RUN] Would replace ${replacementCount} URL(s) in file`);
+        console.log(`  🔍 [DRY RUN] Would replace the URL in file`);
         console.log('  📋 Preview (first 500 chars):');
         console.log('  ' + '─'.repeat(50));
         console.log(modifiedContent.substring(0, 500).split('\n').map(line => `  ${line}`).join('\n'));
@@ -129,7 +137,7 @@ async function processNote(filePath, geminiService, twitterService) {
         console.log('  ' + '─'.repeat(50));
       } else {
         await fs.writeFile(filePath, modifiedContent, 'utf-8');
-        console.log(`  💾 Updated file with ${replacementCount} expanded URL(s)`);
+        console.log(`  💾 Updated file with expanded URL`);
       }
     }
 
@@ -174,9 +182,13 @@ async function main() {
     process.exit(1);
   }
 
-  // Read all markdown files from notes directory
+  // Read all markdown files from notes directory (base folder only)
   const files = await fs.readdir(config.notesPath);
-  const markdownFiles = files.filter(file => file.endsWith('.md'));
+  const markdownFiles = files.filter(file => 
+    file.endsWith('.md') && 
+    !file.includes('/') && 
+    !file.startsWith('.')
+  );
 
   if (markdownFiles.length === 0) {
     console.log('⚠️  No markdown files found in notes directory');
