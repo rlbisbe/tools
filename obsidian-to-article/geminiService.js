@@ -97,26 +97,22 @@ class GeminiService {
 
   /**
    * Get the appropriate command format for the CLI tool
-   * Returns the full command with the prompt
+   * Returns command that accepts prompt via stdin
    */
-  getToolCommand(prompt) {
-    // Escape the prompt for shell usage
-    const escapedPrompt = prompt.replace(/'/g, "'\\''");
-
+  getToolCommand() {
     switch (this.toolType) {
       case 'kiro':
-        // Kiro CLI: kiro-cli chat --no-interactive --trust-all-tools "prompt"
-        return `${this.cliCommand} chat --no-interactive --trust-all-tools '${escapedPrompt}'`;
+        // Kiro CLI: reads from stdin with --no-interactive
+        return `${this.cliCommand} chat --no-interactive --trust-all-tools`;
 
       case 'claude':
-        // Claude Code CLI: claude -p "prompt" --output-format text --allowedTools All
-        // Using --allowedTools to skip permission prompts in non-interactive mode
-        return `${this.cliCommand} -p '${escapedPrompt}' --output-format text`;
+        // Claude Code CLI: use -p flag with dash to read from stdin
+        return `${this.cliCommand} -p -`;
 
       case 'gemini':
       default:
-        // Gemini CLI: gemini -p "prompt"
-        return `${this.cliCommand} -p '${escapedPrompt}'`;
+        // Gemini CLI: use -p flag with dash to read from stdin
+        return `${this.cliCommand} -p -`;
     }
   }
 
@@ -157,9 +153,10 @@ Return only clean Markdown:`;
       const cliStart = Date.now();
 
       // Execute the CLI tool with the prompt
-      // Each tool has its own command format with the prompt embedded
-      const command = this.getToolCommand(prompt);
+      // Use stdin for prompts to avoid command-line length limits
+      const command = this.getToolCommand();
       const { stdout, stderr } = await execAsync(command, {
+        input: prompt,  // Pass prompt via stdin
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
         timeout: 120000, // 2 minute timeout
         shell: true
