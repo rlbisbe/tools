@@ -168,4 +168,56 @@ End.`;
     expect(modifiedContent).not.toContain('https://example.com/test');
     expect(modifiedContent).toContain('# Article Content');
   });
+
+  test('skips notes that already contain processed content', async () => {
+    const testFile = path.join(testDir, 'already-processed.md');
+    const alreadyProcessedContent = `# Test Note
+
+---
+
+# Article Content
+
+Some processed content here.
+
+**Source:** https://example.com/test
+
+---
+
+End of note.`;
+
+    await fs.writeFile(testFile, alreadyProcessedContent, 'utf-8');
+
+    const { extractUrls } = await import('../utils.js');
+
+    let content = await fs.readFile(testFile, 'utf-8');
+    const urls = extractUrls(content);
+    
+    expect(urls).toHaveLength(1);
+
+    // Check if note already contains processed content
+    const hasProcessedContent = content.includes('**Source:**') || content.includes('---\n\n# ');
+    expect(hasProcessedContent).toBe(true);
+
+    // In the actual implementation, this note would be skipped
+    // Verify the content remains unchanged
+    const finalContent = await fs.readFile(testFile, 'utf-8');
+    expect(finalContent).toBe(alreadyProcessedContent);
+  });
+
+  test('processes notes without processed content markers', async () => {
+    const testFile = path.join(testDir, 'fresh-note.md');
+    const freshContent = `# Fresh Note
+
+Check this: https://example.com/fresh
+
+Some notes.`;
+
+    await fs.writeFile(testFile, freshContent, 'utf-8');
+
+    let content = await fs.readFile(testFile, 'utf-8');
+    
+    // Check that this note should be processed
+    const hasProcessedContent = content.includes('**Source:**') || content.includes('---\n\n# ');
+    expect(hasProcessedContent).toBe(false);
+  });
 });

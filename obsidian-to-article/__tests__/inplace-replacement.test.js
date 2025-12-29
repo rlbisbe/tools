@@ -158,13 +158,13 @@ End of file.`;
         // Replace markdown-style links first
         const markdownLinkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, 'g');
         const markdownReplaced = content.replace(markdownLinkRegex, (match, linkText) => {
-          return `\n\n---\n\n# ${linkText}\n\n${markdown}\n\n---\n\n`;
+          return `\n\n---\n\n# ${linkText}\n\n${markdown}\n\n**Source:** ${url}\n\n---\n\n`;
         });
 
         // If no markdown link was found, replace plain URL
         if (markdownReplaced === content) {
           content = content.replace(new RegExp(escapedUrl, 'g'), 
-            `\n\n---\n\n# Article Content\n\n${markdown}\n\n---\n\n`);
+            `\n\n---\n\n# Article Content\n\n${markdown}\n\n**Source:** ${url}\n\n---\n\n`);
         } else {
           content = markdownReplaced;
         }
@@ -176,8 +176,14 @@ End of file.`;
     expect(content).toContain('# Link Text');
     expect(content).toContain('First content.');
     expect(content).toContain('Second content.');
-    expect(content).not.toContain('https://example.com/first');
-    expect(content).not.toContain('https://example.com/second');
+    expect(content).toContain('**Source:** https://example.com/first');
+    expect(content).toContain('**Source:** https://example.com/second');
+    
+    // Check that original URLs are not present as standalone URLs (but allow in Source lines)
+    const contentWithoutSources = content.replace(/\*\*Source:\*\* https:\/\/[^\s]+/g, '');
+    expect(contentWithoutSources).not.toContain('https://example.com/first');
+    expect(contentWithoutSources).not.toContain('https://example.com/second');
+    
     expect(content).toContain('End of file.');
 
     expect(mockFetchUrlContent).toHaveBeenCalledTimes(2);
