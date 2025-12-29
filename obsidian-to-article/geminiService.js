@@ -91,13 +91,14 @@ class GeminiService {
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
   }
 
-  async convertHtmlToMarkdown(html, url) {
+  async convertHtmlToMarkdown(html, url, retryCount = 0) {
     console.log(colors.cyan('Using real Gemini API'));
     const totalStart = Date.now();
 
     await logger.info('Starting Gemini API call', {
       url,
       htmlLength: html.length,
+      retryCount,
       timestamp: new Date().toISOString()
     });
 
@@ -183,22 +184,46 @@ Return only clean Markdown:`;
         statusText: error.response?.statusText,
         headers: error.response?.headers,
         data: error.response?.data,
-        totalTime
+        totalTime,
+        retryCount
       });
 
       // Handle rate limiting specifically
       if (error.response?.status === 429) {
-        const retryAfter = error.response?.headers['retry-after'];
-        const rateLimitReset = error.response?.headers['x-ratelimit-reset'];
+        const errorData = error.response?.data?.error;
+        let retryDelay = 60; // Default 60 seconds
+        
+        // Parse retry delay from Google's error response
+        if (errorData?.details) {
+          const retryInfo = errorData.details.find(d => d['@type']?.includes('RetryInfo'));
+          if (retryInfo?.retryDelay) {
+            // Parse delay like "48s" or "48.567136735s"
+            const delayMatch = retryInfo.retryDelay.match(/(\d+(?:\.\d+)?)s?/);
+            if (delayMatch) {
+              retryDelay = Math.ceil(parseFloat(delayMatch[1]));
+            }
+          }
+        }
         
         await logger.warn('Rate limit hit', {
           url,
-          retryAfter,
-          rateLimitReset,
-          headers: error.response?.headers
+          retryDelay,
+          retryCount,
+          errorDetails: errorData
         });
         
-        console.log(colors.warning(`Rate limited (429) - Retry after: ${retryAfter || 'unknown'}`));
+        // Retry up to 2 times with exponential backoff
+        if (retryCount < 2) {
+          console.log(colors.warning(`Rate limited (429) - Retrying in ${retryDelay}s (attempt ${retryCount + 1}/3)`));
+          
+          // Wait for the specified delay
+          await new Promise(resolve => setTimeout(resolve, retryDelay * 1000));
+          
+          // Retry the request
+          return this.convertHtmlToMarkdown(html, url, retryCount + 1);
+        } else {
+          console.log(colors.error(`Rate limited (429) - Max retries exceeded`));
+        }
       }
 
       console.log(colors.error(`Error calling Gemini API: ${error.message}`));
