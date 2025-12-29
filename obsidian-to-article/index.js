@@ -9,8 +9,7 @@ import {
   extractUrls,
   shouldIgnoreUrl,
   isTwitterUrl,
-  fetchUrlContent,
-  createFilenameFromUrl
+  fetchUrlContent
 } from './utils.js';
 
 // Load environment variables
@@ -21,9 +20,7 @@ const config = {
   useMockGemini: process.env.USE_MOCK_GEMINI === 'true',
   twitterBearerToken: process.env.TWITTER_BEARER_TOKEN,
   notesPath: process.env.OBSIDIAN_NOTES_PATH || './notes',
-  outputPath: process.env.OUTPUT_PATH || './output',
-  dryRun: process.env.DRY_RUN === 'true',
-  deleteLinks: process.env.DELETE_LINKS !== 'false' // Default to true
+  dryRun: process.env.DRY_RUN === 'true'
 };
 
 /**
@@ -47,7 +44,8 @@ async function processNote(filePath, geminiService, twitterService) {
 
     console.log(`  Found ${urls.length} URL(s)`);
 
-    const processedUrls = [];
+    let modifiedContent = content;
+    let replacementCount = 0;
 
     // Process each URL
     for (const url of urls) {
@@ -59,7 +57,6 @@ async function processNote(filePath, geminiService, twitterService) {
 
       try {
         let markdown;
-        let filename;
 
         // Handle Twitter URLs separately
         if (isTwitterUrl(url)) {
@@ -70,7 +67,6 @@ async function processNote(filePath, geminiService, twitterService) {
 
           // Use Twitter service to extract tweet/thread
           markdown = await twitterService.urlToMarkdown(url);
-          filename = `twitter-${twitterService.extractTweetId(url)}`;
 
         } else {
           // Regular web article - fetch and convert with Gemini
@@ -78,58 +74,48 @@ async function processNote(filePath, geminiService, twitterService) {
 
           console.log('  🔄 Converting to Markdown...');
           markdown = await geminiService.convertHtmlToMarkdown(html, url);
-          filename = createFilenameFromUrl(url);
         }
 
-        const outputFile = path.join(config.outputPath, `${filename}.md`);
+        // Replace URL with markdown content in-place
+        const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Replace markdown-style links first
+        const markdownLinkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapedUrl}\\)`, 'g');
+        const markdownReplaced = modifiedContent.replace(markdownLinkRegex, (match, linkText) => {
+          return `\n\n---\n\n# ${linkText}\n\n${markdown}\n\n---\n\n`;
+        });
 
-        // Handle dry-run mode
-        if (config.dryRun) {
-          console.log(`  🔍 [DRY RUN] Would save to: ${outputFile}`);
-          console.log('  📋 Preview (first 500 chars):');
-          console.log('  ' + '─'.repeat(50));
-          console.log(markdown.substring(0, 500).split('\n').map(line => `  ${line}`).join('\n'));
-          if (markdown.length > 500) {
-            console.log('  ... (truncated)');
-          }
-          console.log('  ' + '─'.repeat(50));
+        // If no markdown link was found, replace plain URL
+        if (markdownReplaced === modifiedContent) {
+          modifiedContent = modifiedContent.replace(new RegExp(escapedUrl, 'g'), 
+            `\n\n---\n\n# Article Content\n\n${markdown}\n\n---\n\n`);
         } else {
-          // Save the result
-          await fs.mkdir(config.outputPath, { recursive: true });
-          await fs.writeFile(outputFile, markdown, 'utf-8');
-          console.log(`  ✅ Saved: ${outputFile}`);
+          modifiedContent = markdownReplaced;
         }
 
-        // Track successfully processed URLs
-        processedUrls.push(url);
+        replacementCount++;
+        console.log(`  ✅ Replaced URL with content`);
 
       } catch (error) {
         console.error(`  ❌ Failed to process ${url}:`, error.message);
       }
     }
 
-    // Delete links from source file if enabled
-    if (config.deleteLinks && processedUrls.length > 0 && !config.dryRun) {
-      let modifiedContent = originalContent;
-
-      for (const url of processedUrls) {
-        // Remove markdown-style links containing this URL
-        const markdownLinkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`, 'g');
-        modifiedContent = modifiedContent.replace(markdownLinkRegex, '');
-
-        // Remove plain URLs
-        modifiedContent = modifiedContent.replace(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
-      }
-
-      // Clean up extra blank lines (more than 2 consecutive)
-      modifiedContent = modifiedContent.replace(/\n{3,}/g, '\n\n');
-
-      if (modifiedContent !== originalContent) {
+    // Save modified content back to file
+    if (replacementCount > 0) {
+      if (config.dryRun) {
+        console.log(`  🔍 [DRY RUN] Would replace ${replacementCount} URL(s) in file`);
+        console.log('  📋 Preview (first 500 chars):');
+        console.log('  ' + '─'.repeat(50));
+        console.log(modifiedContent.substring(0, 500).split('\n').map(line => `  ${line}`).join('\n'));
+        if (modifiedContent.length > 500) {
+          console.log('  ... (truncated)');
+        }
+        console.log('  ' + '─'.repeat(50));
+      } else {
         await fs.writeFile(filePath, modifiedContent, 'utf-8');
-        console.log(`  🗑️  Removed ${processedUrls.length} processed link(s) from source file`);
+        console.log(`  💾 Updated file with ${replacementCount} expanded URL(s)`);
       }
-    } else if (config.deleteLinks && processedUrls.length > 0 && config.dryRun) {
-      console.log(`  🔍 [DRY RUN] Would remove ${processedUrls.length} processed link(s) from source file`);
     }
 
   } catch (error) {
@@ -157,11 +143,9 @@ async function main() {
   const twitterService = createTwitterService(config.twitterBearerToken);
 
   console.log(`📁 Notes path: ${config.notesPath}`);
-  console.log(`📁 Output path: ${config.outputPath}`);
   console.log(`🤖 Using ${config.useMockGemini ? 'MOCK' : 'REAL'} Gemini service`);
   console.log(`🐦 Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}`);
-  console.log(`🔍 Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}`);
-  console.log(`🗑️  Delete links: ${config.deleteLinks ? 'ENABLED' : 'DISABLED'}\n`);
+  console.log(`🔍 Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}\n`);
 
   // Check if notes directory exists
   try {
