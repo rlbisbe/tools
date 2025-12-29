@@ -55,8 +55,6 @@ async function processNote(filePath, geminiService, twitterService) {
 
     // Process the single URL
     const url = urls[0];
-    // Process the single URL
-    const url = urls[0];
 
     // Check if URL should be ignored
     if (shouldIgnoreUrl(url)) {
