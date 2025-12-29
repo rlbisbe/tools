@@ -48,6 +48,12 @@ async function processNote(filePath, geminiService, twitterService) {
       return;
     }
 
+    // Check if note already contains processed content
+    if (content.includes('**Source:**') || content.includes('---\n\n# ')) {
+      console.log('  Skipping note that already contains processed content');
+      return;
+    }
+
     console.log(`  Found 1 URL: ${urls[0]}`);
 
     let modifiedContent = content;
