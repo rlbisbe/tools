@@ -12,11 +12,14 @@ const __dirname = path.dirname(__filename);
  * Generate .env file content from config
  */
 export function generateEnvContent(config) {
-  return `# Gemini CLI Configuration
-# Command to invoke the Gemini CLI tool (default: 'gemini')
-GEMINI_CLI_COMMAND=${config.GEMINI_CLI_COMMAND}
+  return `# AI CLI Tool Configuration
+# Choose which AI CLI tool to use: 'gemini', 'kiro', or 'claude'
+CLI_TOOL_TYPE=${config.CLI_TOOL_TYPE}
 
-# Set to 'true' to use mock Gemini service (for testing without CLI tool)
+# Command to invoke the CLI tool
+CLI_COMMAND=${config.CLI_COMMAND}
+
+# Set to 'true' to use mock service (for testing without CLI tool)
 USE_MOCK_GEMINI=${config.USE_MOCK_GEMINI}
 
 # Twitter API Configuration (optional - for Twitter/X URL support)
@@ -44,14 +47,29 @@ export function getSetupQuestions() {
     {
       type: 'confirm',
       name: 'useMockGemini',
-      message: 'Do you want to use MOCK Gemini service (no CLI tool needed)?',
+      message: 'Do you want to use MOCK service (no CLI tool needed)?',
       default: true
     },
     {
-      type: 'input',
-      name: 'geminiCliCommand',
-      message: '💡 Enter the Gemini CLI command (e.g., "gemini" or "/path/to/gemini"):',
+      type: 'list',
+      name: 'cliToolType',
+      message: '🤖 Select which AI CLI tool you want to use:',
+      choices: [
+        { name: 'Gemini', value: 'gemini' },
+        { name: 'Kiro', value: 'kiro' },
+        { name: 'Claude Code', value: 'claude' }
+      ],
       default: 'gemini',
+      when: (answers) => !answers.useMockGemini
+    },
+    {
+      type: 'input',
+      name: 'cliCommand',
+      message: (answers) => {
+        const toolName = answers.cliToolType || 'gemini';
+        return `💡 Enter the ${toolName} CLI command (e.g., "${toolName}" or "/path/to/${toolName}"):`;
+      },
+      default: (answers) => answers.cliToolType || 'gemini',
       when: (answers) => !answers.useMockGemini,
       validate: (input) => {
         if (!input || input.trim() === '') {
@@ -105,9 +123,10 @@ export function getSetupQuestions() {
 export function answersToConfig(answers) {
   return {
     USE_MOCK_GEMINI: answers.useMockGemini ? 'true' : 'false',
-    GEMINI_CLI_COMMAND: answers.useMockGemini
+    CLI_TOOL_TYPE: answers.useMockGemini ? 'gemini' : (answers.cliToolType || 'gemini'),
+    CLI_COMMAND: answers.useMockGemini
       ? 'gemini'
-      : (answers.geminiCliCommand || 'gemini'),
+      : (answers.cliCommand || answers.cliToolType || 'gemini'),
     TWITTER_BEARER_TOKEN: answers.twitterBearerToken || 'your_twitter_bearer_token_here',
     OBSIDIAN_NOTES_PATH: answers.notesPath,
     OUTPUT_PATH: answers.outputPath,
@@ -193,7 +212,7 @@ export async function runSetup() {
   console.log('🎉 SETUP COMPLETE!');
   console.log('━'.repeat(60));
   console.log('\n📋 Your configuration:');
-  console.log(`  • Gemini: ${config.USE_MOCK_GEMINI === 'true' ? 'MOCK mode' : `CLI tool (${config.GEMINI_CLI_COMMAND})`}`);
+  console.log(`  • AI Tool: ${config.USE_MOCK_GEMINI === 'true' ? 'MOCK mode' : `${config.CLI_TOOL_TYPE.toUpperCase()} (${config.CLI_COMMAND})`}`);
   console.log(`  • Twitter: ${config.TWITTER_BEARER_TOKEN !== 'your_twitter_bearer_token_here' ? 'ENABLED' : 'DISABLED'}`);
   console.log(`  • Notes path: ${config.OBSIDIAN_NOTES_PATH}`);
   console.log(`  • Output path: ${config.OUTPUT_PATH}`);

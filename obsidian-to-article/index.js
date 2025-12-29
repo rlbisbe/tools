@@ -17,7 +17,8 @@ import { logger, logSuccess, logError, logWarning, logInfo, logBold, colors } fr
 dotenv.config();
 
 const config = {
-  geminiCliCommand: process.env.GEMINI_CLI_COMMAND || 'gemini',
+  cliToolType: process.env.CLI_TOOL_TYPE || 'gemini',
+  cliCommand: process.env.CLI_COMMAND || (process.env.GEMINI_CLI_COMMAND || 'gemini'),
   useMockGemini: process.env.USE_MOCK_GEMINI === 'true',
   twitterBearerToken: process.env.TWITTER_BEARER_TOKEN,
   notesPath: process.env.OBSIDIAN_NOTES_PATH || './notes',
@@ -191,20 +192,20 @@ async function main() {
   logBold('Obsidian to Article Converter\n');
 
   // Validate configuration
-  if (!config.useMockGemini && !config.geminiCliCommand) {
-    logError('Error: GEMINI_CLI_COMMAND is required when USE_MOCK_GEMINI is not true');
+  if (!config.useMockGemini && !config.cliCommand) {
+    logError('Error: CLI_COMMAND is required when USE_MOCK_GEMINI is not true');
     logError('Please set up your .env file (see .env.example) or ensure the CLI tool is in your PATH');
     process.exit(1);
   }
 
   // Create Gemini service
-  const geminiService = createGeminiService(config.useMockGemini, config.geminiCliCommand);
+  const geminiService = createGeminiService(config.useMockGemini, config.cliCommand, config.cliToolType);
 
   // Create Twitter service (optional)
   const twitterService = createTwitterService(config.twitterBearerToken);
 
   logInfo(`Notes path: ${config.notesPath}`);
-  logInfo(`Using ${config.useMockGemini ? 'MOCK' : 'REAL'} Gemini service`);
+  logInfo(`CLI Tool: ${config.useMockGemini ? 'MOCK' : `${config.cliToolType.toUpperCase()} (${config.cliCommand})`}`);
   logInfo(`Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}`);
   logInfo(`Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}\n`);
 

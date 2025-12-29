@@ -44,7 +44,8 @@ describe('Setup Wizard', () => {
   describe('generateEnvContent', () => {
     test('generates correct .env content with all options', () => {
       const config = {
-        GEMINI_CLI_COMMAND: 'gemini',
+        CLI_TOOL_TYPE: 'gemini',
+        CLI_COMMAND: 'gemini',
         USE_MOCK_GEMINI: 'false',
         TWITTER_BEARER_TOKEN: 'test-bearer-token',
         OBSIDIAN_NOTES_PATH: './my-notes',
@@ -55,7 +56,8 @@ describe('Setup Wizard', () => {
 
       const envContent = generateEnvContent(config);
 
-      expect(envContent).toContain('GEMINI_CLI_COMMAND=gemini');
+      expect(envContent).toContain('CLI_TOOL_TYPE=gemini');
+      expect(envContent).toContain('CLI_COMMAND=gemini');
       expect(envContent).toContain('USE_MOCK_GEMINI=false');
       expect(envContent).toContain('TWITTER_BEARER_TOKEN=test-bearer-token');
       expect(envContent).toContain('OBSIDIAN_NOTES_PATH=./my-notes');
@@ -64,9 +66,10 @@ describe('Setup Wizard', () => {
       expect(envContent).toContain('DELETE_LINKS=false');
     });
 
-    test('generates content with mock Gemini', () => {
+    test('generates content with mock service', () => {
       const config = {
-        GEMINI_CLI_COMMAND: 'gemini',
+        CLI_TOOL_TYPE: 'gemini',
+        CLI_COMMAND: 'gemini',
         USE_MOCK_GEMINI: 'true',
         TWITTER_BEARER_TOKEN: 'your_twitter_bearer_token_here',
         OBSIDIAN_NOTES_PATH: './notes',
@@ -78,12 +81,13 @@ describe('Setup Wizard', () => {
       const envContent = generateEnvContent(config);
 
       expect(envContent).toContain('USE_MOCK_GEMINI=true');
-      expect(envContent).toContain('GEMINI_CLI_COMMAND=gemini');
+      expect(envContent).toContain('CLI_TOOL_TYPE=gemini');
+      expect(envContent).toContain('CLI_COMMAND=gemini');
     });
   });
 
   describe('answersToConfig', () => {
-    test('converts answers to config with mock Gemini', () => {
+    test('converts answers to config with mock service', () => {
       const answers = {
         useMockGemini: true,
         useTwitter: false,
@@ -97,7 +101,8 @@ describe('Setup Wizard', () => {
 
       expect(config).toEqual({
         USE_MOCK_GEMINI: 'true',
-        GEMINI_CLI_COMMAND: 'gemini',
+        CLI_TOOL_TYPE: 'gemini',
+        CLI_COMMAND: 'gemini',
         TWITTER_BEARER_TOKEN: 'your_twitter_bearer_token_here',
         OBSIDIAN_NOTES_PATH: './notes',
         OUTPUT_PATH: './output',
@@ -106,10 +111,11 @@ describe('Setup Wizard', () => {
       });
     });
 
-    test('converts answers to config with real Gemini CLI', () => {
+    test('converts answers to config with Gemini CLI', () => {
       const answers = {
         useMockGemini: false,
-        geminiCliCommand: '/usr/local/bin/gemini',
+        cliToolType: 'gemini',
+        cliCommand: 'gemini',
         useTwitter: true,
         twitterBearerToken: 'real-bearer-token',
         notesPath: './my-notes',
@@ -122,13 +128,50 @@ describe('Setup Wizard', () => {
 
       expect(config).toEqual({
         USE_MOCK_GEMINI: 'false',
-        GEMINI_CLI_COMMAND: '/usr/local/bin/gemini',
+        CLI_TOOL_TYPE: 'gemini',
+        CLI_COMMAND: 'gemini',
         TWITTER_BEARER_TOKEN: 'real-bearer-token',
         OBSIDIAN_NOTES_PATH: './my-notes',
         OUTPUT_PATH: './my-output',
         DRY_RUN: 'true',
         DELETE_LINKS: 'false'
       });
+    });
+
+    test('converts answers to config with Kiro CLI', () => {
+      const answers = {
+        useMockGemini: false,
+        cliToolType: 'kiro',
+        cliCommand: 'kiro',
+        useTwitter: false,
+        notesPath: './notes',
+        outputPath: './output',
+        dryRun: false,
+        deleteLinks: true
+      };
+
+      const config = answersToConfig(answers);
+
+      expect(config.CLI_TOOL_TYPE).toBe('kiro');
+      expect(config.CLI_COMMAND).toBe('kiro');
+    });
+
+    test('converts answers to config with Claude CLI', () => {
+      const answers = {
+        useMockGemini: false,
+        cliToolType: 'claude',
+        cliCommand: 'claude',
+        useTwitter: false,
+        notesPath: './notes',
+        outputPath: './output',
+        dryRun: false,
+        deleteLinks: true
+      };
+
+      const config = answersToConfig(answers);
+
+      expect(config.CLI_TOOL_TYPE).toBe('claude');
+      expect(config.CLI_COMMAND).toBe('claude');
     });
 
     test('handles missing Twitter token', () => {
@@ -161,7 +204,8 @@ describe('Setup Wizard', () => {
       const questionNames = questions.map(q => q.name);
 
       expect(questionNames).toContain('useMockGemini');
-      expect(questionNames).toContain('geminiCliCommand');
+      expect(questionNames).toContain('cliToolType');
+      expect(questionNames).toContain('cliCommand');
       expect(questionNames).toContain('useTwitter');
       expect(questionNames).toContain('twitterBearerToken');
       expect(questionNames).toContain('notesPath');
@@ -184,12 +228,20 @@ describe('Setup Wizard', () => {
       expect(questionMap.deleteLinks.default).toBe(true);
     });
 
-    test('geminiCliCommand shown only when not using mock', () => {
+    test('cliToolType shown only when not using mock', () => {
       const questions = getSetupQuestions();
-      const geminiCliQuestion = questions.find(q => q.name === 'geminiCliCommand');
+      const cliToolTypeQuestion = questions.find(q => q.name === 'cliToolType');
 
-      expect(geminiCliQuestion.when({ useMockGemini: true })).toBe(false);
-      expect(geminiCliQuestion.when({ useMockGemini: false })).toBe(true);
+      expect(cliToolTypeQuestion.when({ useMockGemini: true })).toBe(false);
+      expect(cliToolTypeQuestion.when({ useMockGemini: false })).toBe(true);
+    });
+
+    test('cliCommand shown only when not using mock', () => {
+      const questions = getSetupQuestions();
+      const cliCommandQuestion = questions.find(q => q.name === 'cliCommand');
+
+      expect(cliCommandQuestion.when({ useMockGemini: true })).toBe(false);
+      expect(cliCommandQuestion.when({ useMockGemini: false })).toBe(true);
     });
 
     test('twitterBearerToken shown only when using Twitter', () => {
@@ -200,14 +252,14 @@ describe('Setup Wizard', () => {
       expect(twitterQuestion.when({ useTwitter: true })).toBe(true);
     });
 
-    test('geminiCliCommand has validation', () => {
+    test('cliCommand has validation', () => {
       const questions = getSetupQuestions();
-      const geminiCliQuestion = questions.find(q => q.name === 'geminiCliCommand');
+      const cliCommandQuestion = questions.find(q => q.name === 'cliCommand');
 
-      expect(typeof geminiCliQuestion.validate).toBe('function');
-      expect(geminiCliQuestion.validate('')).not.toBe(true);
-      expect(geminiCliQuestion.validate('   ')).not.toBe(true);
-      expect(geminiCliQuestion.validate('gemini')).toBe(true);
+      expect(typeof cliCommandQuestion.validate).toBe('function');
+      expect(cliCommandQuestion.validate('')).not.toBe(true);
+      expect(cliCommandQuestion.validate('   ')).not.toBe(true);
+      expect(cliCommandQuestion.validate('gemini')).toBe(true);
     });
   });
 
@@ -255,10 +307,11 @@ describe('Setup Wizard', () => {
       }
     });
 
-    test('creates .env file with real CLI command', async () => {
+    test('creates .env file with Gemini CLI', async () => {
       mockPromptResponses = {
         useMockGemini: false,
-        geminiCliCommand: '/usr/local/bin/gemini',
+        cliToolType: 'gemini',
+        cliCommand: 'gemini',
         useTwitter: true,
         twitterBearerToken: 'test-bearer-456',
         notesPath: './custom-notes',
@@ -273,11 +326,37 @@ describe('Setup Wizard', () => {
       try {
         const config = await runSetup();
 
-        expect(config.GEMINI_CLI_COMMAND).toBe('/usr/local/bin/gemini');
+        expect(config.CLI_TOOL_TYPE).toBe('gemini');
+        expect(config.CLI_COMMAND).toBe('gemini');
         expect(config.TWITTER_BEARER_TOKEN).toBe('test-bearer-456');
         expect(config.USE_MOCK_GEMINI).toBe('false');
         expect(config.DRY_RUN).toBe('true');
         expect(config.DELETE_LINKS).toBe('false');
+      } finally {
+        console.log = originalLog;
+      }
+    });
+
+    test('creates .env file with Kiro CLI', async () => {
+      mockPromptResponses = {
+        useMockGemini: false,
+        cliToolType: 'kiro',
+        cliCommand: 'kiro',
+        useTwitter: false,
+        notesPath: './notes',
+        outputPath: './output',
+        dryRun: false,
+        deleteLinks: true
+      };
+
+      const originalLog = console.log;
+      console.log = jest.fn();
+
+      try {
+        const config = await runSetup();
+
+        expect(config.CLI_TOOL_TYPE).toBe('kiro');
+        expect(config.CLI_COMMAND).toBe('kiro');
       } finally {
         console.log = originalLog;
       }
@@ -352,10 +431,11 @@ describe('Setup Wizard', () => {
       expect(config.DELETE_LINKS).toBe('true');
     });
 
-    test('full production setup', () => {
+    test('full production setup with Gemini', () => {
       const answers = {
         useMockGemini: false,
-        geminiCliCommand: '/usr/local/bin/gemini',
+        cliToolType: 'gemini',
+        cliCommand: '/usr/local/bin/gemini',
         useTwitter: true,
         twitterBearerToken: 'prod-bearer-token',
         notesPath: '/path/to/obsidian/notes',
@@ -367,10 +447,30 @@ describe('Setup Wizard', () => {
       const config = answersToConfig(answers);
 
       expect(config.USE_MOCK_GEMINI).toBe('false');
-      expect(config.GEMINI_CLI_COMMAND).toBe('/usr/local/bin/gemini');
+      expect(config.CLI_TOOL_TYPE).toBe('gemini');
+      expect(config.CLI_COMMAND).toBe('/usr/local/bin/gemini');
       expect(config.TWITTER_BEARER_TOKEN).toBe('prod-bearer-token');
       expect(config.OBSIDIAN_NOTES_PATH).toBe('/path/to/obsidian/notes');
       expect(config.OUTPUT_PATH).toBe('/path/to/output');
+    });
+
+    test('full production setup with Claude Code', () => {
+      const answers = {
+        useMockGemini: false,
+        cliToolType: 'claude',
+        cliCommand: 'claude',
+        useTwitter: false,
+        notesPath: './notes',
+        outputPath: './output',
+        dryRun: false,
+        deleteLinks: true
+      };
+
+      const config = answersToConfig(answers);
+
+      expect(config.USE_MOCK_GEMINI).toBe('false');
+      expect(config.CLI_TOOL_TYPE).toBe('claude');
+      expect(config.CLI_COMMAND).toBe('claude');
     });
 
     test('testing setup (dry-run enabled)', () => {

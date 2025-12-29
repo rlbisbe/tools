@@ -26,14 +26,32 @@ describe('GeminiService', () => {
     });
 
     test('creates real GeminiService when useMock is false and CLI command provided', () => {
-      const service = createGeminiService(false, 'gemini');
+      const service = createGeminiService(false, 'gemini', 'gemini');
       expect(service).toBeDefined();
       expect(service.convertHtmlToMarkdown).toBeDefined();
     });
 
+    test('creates Kiro service with toolType', () => {
+      const service = createGeminiService(false, 'kiro', 'kiro');
+      expect(service).toBeDefined();
+      expect(service.toolType).toBe('kiro');
+    });
+
+    test('creates Claude Code service with toolType', () => {
+      const service = createGeminiService(false, 'claude', 'claude');
+      expect(service).toBeDefined();
+      expect(service.toolType).toBe('claude');
+    });
+
     test('throws error when useMock is false but no CLI command', () => {
       expect(() => createGeminiService(false, '')).toThrow(
-        'GEMINI_CLI_COMMAND is required when not using mock service'
+        'CLI_COMMAND is required when not using mock service'
+      );
+    });
+
+    test('throws error for invalid tool type', () => {
+      expect(() => createGeminiService(false, 'gemini', 'invalid')).toThrow(
+        'Invalid CLI_TOOL_TYPE'
       );
     });
   });
