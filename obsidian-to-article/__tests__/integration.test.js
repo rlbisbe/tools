@@ -63,9 +63,9 @@ YouTube video: https://youtube.com/watch?v=abc123
   });
 
   test('Mock Gemini service processes HTML', async () => {
-    const { createGeminiService } = await import('../geminiService.js');
+    const { createLLMService } = await import('../llmServiceFactory.js');
 
-    const service = createGeminiService(true);
+    const service = createLLMService(true);
     const html = `
       <html>
         <head><title>Test Article</title></head>
@@ -86,24 +86,24 @@ YouTube video: https://youtube.com/watch?v=abc123
   });
 
   test('Service factory functions', async () => {
-    const { createGeminiService } = await import('../geminiService.js');
+    const { createLLMService } = await import('../llmServiceFactory.js');
     const { createTwitterService } = await import('../twitterService.js');
 
     // Test LLM service creation
-    const mockService = createGeminiService(true);
+    const mockService = createLLMService(true);
     expect(mockService).toBeDefined();
     expect(mockService.getServiceName()).toBe('MockGemini');
 
-    const mockService2 = createGeminiService({ serviceType: 'mock' });
+    const mockService2 = createLLMService({ serviceType: 'mock' });
     expect(mockService2).toBeDefined();
     expect(mockService2.getServiceName()).toBe('MockGemini');
 
-    const apiService = createGeminiService({ serviceType: 'api', apiKey: 'test-key' });
+    const apiService = createLLMService({ serviceType: 'api', apiKey: 'test-key' });
     expect(apiService).toBeDefined();
     expect(apiService.getServiceName()).toBe('GeminiAPI');
 
-    expect(() => createGeminiService({ serviceType: 'api' })).toThrow('apiKey is required');
-    expect(() => createGeminiService({ serviceType: 'invalid' })).toThrow('Invalid serviceType');
+    expect(() => createLLMService({ serviceType: 'api' })).toThrow('apiKey is required');
+    expect(() => createLLMService({ serviceType: 'invalid' })).toThrow('Invalid serviceType');
 
     // Test Twitter service creation
     const noTwitter = createTwitterService();
@@ -125,7 +125,7 @@ YouTube video: https://youtube.com/watch?v=abc123
 
   test('Complete workflow simulation', async () => {
     const { extractUrls, getUrlType } = await import('../utils.js');
-    const { createGeminiService } = await import('../geminiService.js');
+    const { createLLMService } = await import('../llmServiceFactory.js');
 
     // Create a test note
     const noteContent = `# Test Note
@@ -159,7 +159,7 @@ Video: https://youtube.com/watch?v=test
     });
 
     // Test mock Gemini processing
-    const gemini = createGeminiService(true);
+    const gemini = createLLMService(true);
     const markdown = await gemini.convertHtmlToMarkdown(
       '<h1>Test</h1><p>Content</p>',
       'https://example.com/test-article'

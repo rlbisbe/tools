@@ -1,7 +1,7 @@
 {
   "name": "obsidian-to-article",
   "version": "1.0.0",
-  "description": "Convert Obsidian notes with URLs into full-length articles using Gemini CLI tool",
+  "description": "Convert Obsidian notes with URLs into full-length articles using AI LLM services (Gemini API, Ollama)",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -15,11 +15,17 @@
     "obsidian",
     "markdown",
     "gemini",
+    "ollama",
+    "llm",
+    "ai",
     "article",
     "converter"
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.6.2",

@@ -3,7 +3,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
-import { createGeminiService } from './geminiService.js';
+import { createLLMService } from './llmServiceFactory.js';
 import { createTwitterService } from './twitterService.js';
 import {
   extractUrls,
@@ -18,10 +18,14 @@ dotenv.config();
 
 const config = {
   // LLM Service configuration
-  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api' or 'mock'
+  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api', 'ollama', or 'mock'
   geminiApiKey: process.env.GEMINI_API_KEY,
   geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
   useMockGemini: process.env.USE_MOCK_GEMINI === 'true',
+
+  // Ollama configuration
+  ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+  ollamaModel: process.env.OLLAMA_MODEL || 'llama2',
 
   // Other configuration
   twitterBearerToken: process.env.TWITTER_BEARER_TOKEN,
@@ -32,7 +36,7 @@ const config = {
 /**
  * Process a single Obsidian note file
  */
-async function processNote(filePath, geminiService, twitterService) {
+async function processNote(filePath, llmService, twitterService) {
   console.log(`\n${colors.bold('Processing:')} ${colors.magenta(path.basename(filePath))}`);
   const fileStart = Date.now();
 
@@ -117,7 +121,7 @@ async function processNote(filePath, geminiService, twitterService) {
 
         console.log(colors.cyan(`  Converting to Markdown... (fetch: ${fetchTime}ms)`));
         const geminiStart = Date.now();
-        markdown = await geminiService.convertHtmlToMarkdown(html, url);
+        markdown = await llmService.convertHtmlToMarkdown(html, url);
         const geminiTime = Date.now() - geminiStart;
         logSuccess(`  Conversion complete (gemini: ${geminiTime}ms)`);
       }
@@ -205,11 +209,13 @@ async function main() {
   }
 
   // Create LLM service
-  const geminiService = createGeminiService({
+  const llmService = createLLMService({
     useMock: config.useMockGemini,
     serviceType: serviceType,
     apiKey: config.geminiApiKey,
-    modelName: config.geminiModel
+    modelName: config.geminiModel,
+    ollamaBaseUrl: config.ollamaBaseUrl,
+    ollamaModel: config.ollamaModel
   });
 
   // Create Twitter service (optional)
@@ -218,7 +224,7 @@ async function main() {
   logInfo(`Notes path: ${config.notesPath}`);
 
   // Display service information
-  const serviceName = geminiService.getServiceName();
+  const serviceName = llmService.getServiceName();
   let serviceInfo = `${serviceType.toUpperCase()} (${serviceName})`;
   if (serviceType === 'api') {
     serviceInfo += ` - Model: ${config.geminiModel}`;
@@ -256,7 +262,7 @@ async function main() {
   // Process each note
   for (const file of markdownFiles) {
     const filePath = path.join(config.notesPath, file);
-    await processNote(filePath, geminiService, twitterService);
+    await processNote(filePath, llmService, twitterService);
   }
 
   logSuccess('\nDone!');

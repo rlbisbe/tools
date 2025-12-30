@@ -1,18 +1,18 @@
 import * as cheerio from 'cheerio';
 import { LLMService } from './llmService.js';
-import { GeminiApiService } from './geminiApiService.js';
 import { colors } from './logger.js';
 
 /**
- * Mock Gemini API service for testing without an API key
+ * Mock LLM service for testing without an API key
  * Converts HTML to basic Markdown using cheerio
  */
-class MockGeminiService extends LLMService {
+export class MockLLMService extends LLMService {
   getServiceName() {
     return 'MockGemini';
   }
+
   async convertHtmlToMarkdown(html, url) {
-    console.log(colors.cyan('Using MOCK Gemini service'));
+    console.log(colors.cyan('Using MOCK LLM service'));
     const totalStart = Date.now();
 
     const parseStart = Date.now();
@@ -82,50 +82,5 @@ class MockGeminiService extends LLMService {
     console.log(colors.dim(`Mock processing complete (parse: ${parseTime}ms, process: ${processTime}ms) | Total: ${totalTime}ms | Input: ${html.length} chars, Output: ${markdown.length} chars`));
 
     return markdown;
-  }
-}
-
-/**
- * Factory function to create the appropriate LLM service
- * @param {Object|boolean} configOrUseMock - Service configuration object OR legacy useMock boolean
- * @returns {LLMService} - An instance of an LLM service
- */
-export function createGeminiService(configOrUseMock = {}) {
-  // Handle legacy signature: createGeminiService(useMock)
-  let config;
-  if (typeof configOrUseMock === 'boolean') {
-    config = {
-      useMock: configOrUseMock,
-      serviceType: 'mock'
-    };
-  } else {
-    config = configOrUseMock;
-  }
-
-  const {
-    useMock = false,
-    serviceType = 'api',
-    apiKey = null,
-    modelName = 'gemini-1.5-flash'
-  } = config;
-
-  // Legacy support: if useMock is true, return mock service
-  if (useMock) {
-    return new MockGeminiService();
-  }
-
-  // Create service based on type
-  switch (serviceType.toLowerCase()) {
-    case 'mock':
-      return new MockGeminiService();
-
-    case 'api':
-      if (!apiKey) {
-        throw new Error('apiKey is required for API-based service');
-      }
-      return new GeminiApiService(apiKey, modelName);
-
-    default:
-      throw new Error(`Invalid serviceType: ${serviceType}. Must be one of: api, mock`);
   }
 }

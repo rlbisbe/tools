@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { createGeminiService } from '../geminiService.js';
+import { createLLMService } from '../llmServiceFactory.js';
 
 // Mock cheerio
 const mockCheerio = {
@@ -18,23 +18,23 @@ describe('GeminiService', () => {
     jest.clearAllMocks();
   });
 
-  describe('createGeminiService', () => {
-    test('creates MockGeminiService when useMock is true', () => {
-      const service = createGeminiService(true);
+  describe('createLLMService', () => {
+    test('creates MockLLMService when useMock is true', () => {
+      const service = createLLMService(true);
       expect(service).toBeDefined();
       expect(service.convertHtmlToMarkdown).toBeDefined();
       expect(service.getServiceName()).toBe('MockGemini');
     });
 
     test('creates MockGeminiService with mock service type', () => {
-      const service = createGeminiService({ serviceType: 'mock' });
+      const service = createLLMService({ serviceType: 'mock' });
       expect(service).toBeDefined();
       expect(service.convertHtmlToMarkdown).toBeDefined();
       expect(service.getServiceName()).toBe('MockGemini');
     });
 
     test('creates GeminiApiService when API key is provided', () => {
-      const service = createGeminiService({
+      const service = createLLMService({
         serviceType: 'api',
         apiKey: 'test-api-key'
       });
@@ -44,19 +44,19 @@ describe('GeminiService', () => {
     });
 
     test('throws error when API service requested but no API key', () => {
-      expect(() => createGeminiService({ serviceType: 'api' })).toThrow(
+      expect(() => createLLMService({ serviceType: 'api' })).toThrow(
         'apiKey is required for API-based service'
       );
     });
 
     test('throws error for invalid service type', () => {
-      expect(() => createGeminiService({ serviceType: 'invalid' })).toThrow(
-        'Invalid serviceType: invalid. Must be one of: api, mock'
+      expect(() => createLLMService({ serviceType: 'invalid' })).toThrow(
+        'Invalid serviceType: invalid. Must be one of: api, mock, ollama'
       );
     });
 
     test('uses custom model name for API service', () => {
-      const service = createGeminiService({
+      const service = createLLMService({
         serviceType: 'api',
         apiKey: 'test-key',
         modelName: 'gemini-1.5-pro'
@@ -71,7 +71,7 @@ describe('GeminiService', () => {
     let mockDom;
 
     beforeEach(() => {
-      service = createGeminiService(true);
+      service = createLLMService(true);
 
       // Mock cheerio DOM
       mockDom = {
@@ -184,13 +184,13 @@ describe('GeminiService', () => {
     // They are skipped by default but can be enabled for manual testing
 
     test('creates service with CLI command', () => {
-      const service = createGeminiService(false, 'gemini');
+      const service = createLLMService(false, 'gemini');
       expect(service).toBeDefined();
       expect(service.cliCommand).toBe('gemini');
     });
 
     test('can specify custom CLI command path', () => {
-      const service = createGeminiService(false, '/usr/local/bin/gemini');
+      const service = createLLMService(false, '/usr/local/bin/gemini');
       expect(service).toBeDefined();
       expect(service.cliCommand).toBe('/usr/local/bin/gemini');
     });
