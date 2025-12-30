@@ -3,7 +3,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
-import { createGeminiService } from './geminiService.js';
+import { createLLMService } from './llmServiceFactory.js';
 import { createTwitterService } from './twitterService.js';
 import {
   extractUrls,
@@ -36,7 +36,7 @@ const config = {
 /**
  * Process a single Obsidian note file
  */
-async function processNote(filePath, geminiService, twitterService) {
+async function processNote(filePath, llmService, twitterService) {
   console.log(`\n${colors.bold('Processing:')} ${colors.magenta(path.basename(filePath))}`);
   const fileStart = Date.now();
 
@@ -121,7 +121,7 @@ async function processNote(filePath, geminiService, twitterService) {
 
         console.log(colors.cyan(`  Converting to Markdown... (fetch: ${fetchTime}ms)`));
         const geminiStart = Date.now();
-        markdown = await geminiService.convertHtmlToMarkdown(html, url);
+        markdown = await llmService.convertHtmlToMarkdown(html, url);
         const geminiTime = Date.now() - geminiStart;
         logSuccess(`  Conversion complete (gemini: ${geminiTime}ms)`);
       }
@@ -209,7 +209,7 @@ async function main() {
   }
 
   // Create LLM service
-  const geminiService = createGeminiService({
+  const llmService = createLLMService({
     useMock: config.useMockGemini,
     serviceType: serviceType,
     apiKey: config.geminiApiKey,
@@ -224,7 +224,7 @@ async function main() {
   logInfo(`Notes path: ${config.notesPath}`);
 
   // Display service information
-  const serviceName = geminiService.getServiceName();
+  const serviceName = llmService.getServiceName();
   let serviceInfo = `${serviceType.toUpperCase()} (${serviceName})`;
   if (serviceType === 'api') {
     serviceInfo += ` - Model: ${config.geminiModel}`;
@@ -262,7 +262,7 @@ async function main() {
   // Process each note
   for (const file of markdownFiles) {
     const filePath = path.join(config.notesPath, file);
-    await processNote(filePath, geminiService, twitterService);
+    await processNote(filePath, llmService, twitterService);
   }
 
   logSuccess('\nDone!');
