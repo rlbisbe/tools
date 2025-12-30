@@ -1,6 +1,8 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as cheerio from 'cheerio';
+import { LLMService } from './llmService.js';
+import { GeminiApiService } from './geminiApiService.js';
 import { logger, colors } from './logger.js';
 
 const execAsync = promisify(exec);
@@ -9,7 +11,10 @@ const execAsync = promisify(exec);
  * Mock Gemini API service for testing without an API key
  * Converts HTML to basic Markdown using cheerio
  */
-class MockGeminiService {
+class MockGeminiService extends LLMService {
+  getServiceName() {
+    return 'MockGemini';
+  }
   async convertHtmlToMarkdown(html, url) {
     console.log(colors.cyan('Using MOCK Gemini service'));
     const totalStart = Date.now();
@@ -89,10 +94,15 @@ class MockGeminiService {
  * Supports multiple AI CLI tools: Gemini, Kiro, and Claude Code
  * Uses the specified CLI tool to convert HTML to well-formatted Markdown
  */
-class GeminiService {
+class GeminiService extends LLMService {
   constructor(cliCommand = 'gemini', toolType = 'gemini') {
+    super();
     this.cliCommand = cliCommand;
     this.toolType = toolType.toLowerCase();
+  }
+
+  getServiceName() {
+    return this.toolType.toUpperCase();
   }
 
   /**
@@ -127,15 +137,7 @@ class GeminiService {
 
     try {
       const promptStart = Date.now();
-      const prompt = `Extract the main article content from this HTML and convert to clean Markdown.
-
-Focus on: title, headings, paragraphs, lists, quotes, code blocks.
-Ignore: navigation, ads, sidebars, comments, footers.
-
-HTML (${html.length} chars):
-${html.length > 50000 ? html.substring(0, 50000) + '\n\n[HTML truncated - too large]' : html}
-
-Return only clean Markdown:`;
+      const prompt = this.buildConversionPrompt(html);
       const promptTime = Date.now() - promptStart;
       console.log(colors.dim(`Prompt prepared (${promptTime}ms, ${html.length} chars HTML)`));
 
@@ -229,26 +231,70 @@ Return only clean Markdown:`;
 }
 
 /**
- * Factory function to create the appropriate AI CLI service
- * @param {boolean} useMock - Whether to use the mock service
- * @param {string} cliCommand - The CLI command to execute (e.g., 'gemini', 'kiro', 'claude')
- * @param {string} toolType - The type of CLI tool ('gemini', 'kiro', or 'claude')
+ * Factory function to create the appropriate LLM service
+ * @param {Object|boolean} configOrUseMock - Service configuration object OR legacy useMock boolean
+ * @param {string} [cliCommand] - Legacy CLI command parameter
+ * @param {string} [toolType] - Legacy tool type parameter
+ * @returns {LLMService} - An instance of an LLM service
  */
-export function createGeminiService(useMock = true, cliCommand = 'gemini', toolType = 'gemini') {
+export function createGeminiService(configOrUseMock = {}, cliCommand = 'gemini', toolType = 'gemini') {
+  // Handle legacy signature: createGeminiService(useMock, cliCommand, toolType)
+  let config;
+  if (typeof configOrUseMock === 'boolean') {
+    config = {
+      useMock: configOrUseMock,
+      serviceType: 'cli',
+      cliCommand,
+      toolType
+    };
+  } else {
+    config = configOrUseMock;
+  }
+
+  const {
+    useMock = false,
+    serviceType = 'api',
+    apiKey = null,
+    modelName = 'gemini-1.5-flash',
+    cliCommand: configCliCommand = 'gemini',
+    toolType: configToolType = 'gemini'
+  } = config;
+
+  // Use config values or fall back to legacy parameters
+  const finalCliCommand = configCliCommand || cliCommand;
+  const finalToolType = configToolType || toolType;
+
+  // Legacy support: if useMock is true, return mock service
   if (useMock) {
     return new MockGeminiService();
   }
 
-  if (!cliCommand) {
-    throw new Error('CLI_COMMAND is required when not using mock service');
-  }
+  // Create service based on type
+  switch (serviceType.toLowerCase()) {
+    case 'mock':
+      return new MockGeminiService();
 
-  // Validate tool type
-  const validToolTypes = ['gemini', 'kiro', 'claude'];
-  const normalizedToolType = toolType.toLowerCase();
-  if (!validToolTypes.includes(normalizedToolType)) {
-    throw new Error(`Invalid CLI_TOOL_TYPE: ${toolType}. Must be one of: ${validToolTypes.join(', ')}`);
-  }
+    case 'api':
+      if (!apiKey) {
+        throw new Error('apiKey is required for API-based service');
+      }
+      return new GeminiApiService(apiKey, modelName);
 
-  return new GeminiService(cliCommand, normalizedToolType);
+    case 'cli':
+      if (!finalCliCommand) {
+        throw new Error('CLI_COMMAND is required when not using mock service');
+      }
+
+      // Validate tool type for CLI
+      const validToolTypes = ['gemini', 'kiro', 'claude'];
+      const normalizedToolType = finalToolType.toLowerCase();
+      if (!validToolTypes.includes(normalizedToolType)) {
+        throw new Error(`Invalid CLI_TOOL_TYPE: ${finalToolType}. Must be one of: ${validToolTypes.join(', ')}`);
+      }
+
+      return new GeminiService(finalCliCommand, normalizedToolType);
+
+    default:
+      throw new Error(`Invalid serviceType: ${serviceType}. Must be one of: api, cli, mock`);
+  }
 }
