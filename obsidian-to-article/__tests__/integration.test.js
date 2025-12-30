@@ -89,22 +89,21 @@ YouTube video: https://youtube.com/watch?v=abc123
     const { createGeminiService } = await import('../geminiService.js');
     const { createTwitterService } = await import('../twitterService.js');
 
-    // Test AI CLI service creation
+    // Test LLM service creation
     const mockService = createGeminiService(true);
     expect(mockService).toBeDefined();
+    expect(mockService.getServiceName()).toBe('MockGemini');
 
-    expect(() => createGeminiService(false, '')).toThrow();
+    const mockService2 = createGeminiService({ serviceType: 'mock' });
+    expect(mockService2).toBeDefined();
+    expect(mockService2.getServiceName()).toBe('MockGemini');
 
-    const geminiService = createGeminiService(false, 'gemini', 'gemini');
-    expect(geminiService).toBeDefined();
+    const apiService = createGeminiService({ serviceType: 'api', apiKey: 'test-key' });
+    expect(apiService).toBeDefined();
+    expect(apiService.getServiceName()).toBe('GeminiAPI');
 
-    const kiroService = createGeminiService(false, 'kiro', 'kiro');
-    expect(kiroService).toBeDefined();
-    expect(kiroService.toolType).toBe('kiro');
-
-    const claudeService = createGeminiService(false, 'claude', 'claude');
-    expect(claudeService).toBeDefined();
-    expect(claudeService.toolType).toBe('claude');
+    expect(() => createGeminiService({ serviceType: 'api' })).toThrow('apiKey is required');
+    expect(() => createGeminiService({ serviceType: 'invalid' })).toThrow('Invalid serviceType');
 
     // Test Twitter service creation
     const noTwitter = createTwitterService();

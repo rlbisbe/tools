@@ -23,36 +23,46 @@ describe('GeminiService', () => {
       const service = createGeminiService(true);
       expect(service).toBeDefined();
       expect(service.convertHtmlToMarkdown).toBeDefined();
+      expect(service.getServiceName()).toBe('MockGemini');
     });
 
-    test('creates real GeminiService when useMock is false and CLI command provided', () => {
-      const service = createGeminiService(false, 'gemini', 'gemini');
+    test('creates MockGeminiService with mock service type', () => {
+      const service = createGeminiService({ serviceType: 'mock' });
       expect(service).toBeDefined();
       expect(service.convertHtmlToMarkdown).toBeDefined();
+      expect(service.getServiceName()).toBe('MockGemini');
     });
 
-    test('creates Kiro service with toolType', () => {
-      const service = createGeminiService(false, 'kiro', 'kiro');
+    test('creates GeminiApiService when API key is provided', () => {
+      const service = createGeminiService({
+        serviceType: 'api',
+        apiKey: 'test-api-key'
+      });
       expect(service).toBeDefined();
-      expect(service.toolType).toBe('kiro');
+      expect(service.convertHtmlToMarkdown).toBeDefined();
+      expect(service.getServiceName()).toBe('GeminiAPI');
     });
 
-    test('creates Claude Code service with toolType', () => {
-      const service = createGeminiService(false, 'claude', 'claude');
-      expect(service).toBeDefined();
-      expect(service.toolType).toBe('claude');
-    });
-
-    test('throws error when useMock is false but no CLI command', () => {
-      expect(() => createGeminiService(false, '')).toThrow(
-        'CLI_COMMAND is required when not using mock service'
+    test('throws error when API service requested but no API key', () => {
+      expect(() => createGeminiService({ serviceType: 'api' })).toThrow(
+        'apiKey is required for API-based service'
       );
     });
 
-    test('throws error for invalid tool type', () => {
-      expect(() => createGeminiService(false, 'gemini', 'invalid')).toThrow(
-        'Invalid CLI_TOOL_TYPE'
+    test('throws error for invalid service type', () => {
+      expect(() => createGeminiService({ serviceType: 'invalid' })).toThrow(
+        'Invalid serviceType: invalid. Must be one of: api, mock'
       );
+    });
+
+    test('uses custom model name for API service', () => {
+      const service = createGeminiService({
+        serviceType: 'api',
+        apiKey: 'test-key',
+        modelName: 'gemini-1.5-pro'
+      });
+      expect(service).toBeDefined();
+      expect(service.modelName).toBe('gemini-1.5-pro');
     });
   });
 

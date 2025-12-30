@@ -1,13 +1,13 @@
 # Obsidian to Article Converter
 
-Convert Obsidian notes containing URLs into full-length Markdown articles using Google's Gemini API (direct API integration or CLI tools).
+Convert Obsidian notes containing URLs into full-length Markdown articles using Google's Gemini API.
 
 ## Features
 
 - ✅ Extracts URLs from Obsidian notes (plain URLs and markdown links)
 - ✅ Fetches HTML content from web pages
-- ✅ **Intelligently extracts core article content** using Gemini API (direct API or CLI)
-- ✅ **API-first architecture** - uses Google Generative AI SDK for better performance
+- ✅ **Intelligently extracts core article content** using Gemini API
+- ✅ **API-based architecture** - uses Google Generative AI SDK for direct API calls
 - ✅ Removes ads, navigation, sidebars, and page clutter
 - ✅ Preserves article structure, code blocks, images, and links
 - ✅ **In-place URL replacement** - replaces URLs with full content directly in source files
@@ -65,7 +65,7 @@ cp .env.example .env
 
 Then edit `.env` file with your configuration:
 ```env
-# Service type: 'api' (recommended), 'cli', or 'mock'
+# Service type: 'api' or 'mock'
 LLM_SERVICE_TYPE=api
 
 # For API-based service (recommended)
@@ -74,11 +74,6 @@ GEMINI_MODEL=gemini-1.5-flash
 
 # For testing with mock service (no API key needed)
 # LLM_SERVICE_TYPE=mock
-
-# For CLI-based service (legacy)
-# LLM_SERVICE_TYPE=cli
-# CLI_COMMAND=gemini
-# CLI_TOOL_TYPE=gemini
 ```
 
 ## Getting a Gemini API Key
@@ -119,7 +114,7 @@ obsidian-to-article/
 ├── index.js              # Main script
 ├── llmService.js         # Base LLM service interface
 ├── geminiApiService.js   # Gemini API service (using Google SDK)
-├── geminiService.js      # CLI-based and mock services
+├── geminiService.js      # Mock service implementation
 ├── twitterService.js     # Twitter API service for tweets/threads
 ├── utils.js              # Utility functions
 ├── logger.js             # Logging service
@@ -183,8 +178,8 @@ URLs from YouTube and Instagram are currently skipped.
 
 ### API Mode (Recommended, Default)
 - Uses Google's Generative AI SDK for direct API calls
-- Fastest and most efficient
-- No CLI dependencies needed
+- Fast and efficient
+- No external dependencies needed
 - Requires API key (free tier available)
 - Intelligently removes ads, navigation, sidebars, and clutter
 - Focuses on main article body, headings, and relevant media
@@ -192,15 +187,9 @@ URLs from YouTube and Instagram are currently skipped.
 - Skips comments, related articles, and promotional content
 - Better at identifying and extracting the actual article vs. page chrome
 
-### CLI Mode (Legacy)
-- Uses external CLI tools (gemini-cli, kiro, claude)
-- Requires CLI tool to be installed
-- Same AI quality as API mode but slower
-- Useful if you already have CLI tools configured
-
 ### Mock Mode (Testing)
 - Uses local HTML-to-Markdown conversion with Cheerio
-- No API key or CLI tool required
+- No API key required
 - Great for testing and development
 - Basic Markdown conversion
 - Simple content extraction
@@ -211,11 +200,9 @@ You can customize the behavior via `.env` file:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `LLM_SERVICE_TYPE` | Service type: 'api', 'cli', or 'mock' | `api` |
+| `LLM_SERVICE_TYPE` | Service type: 'api' or 'mock' | `api` |
 | `GEMINI_API_KEY` | Your Gemini API key (for API service) | - |
 | `GEMINI_MODEL` | Gemini model name | `gemini-1.5-flash` |
-| `CLI_COMMAND` | CLI command (for CLI service, legacy) | `gemini` |
-| `CLI_TOOL_TYPE` | CLI tool type: gemini/kiro/claude (legacy) | `gemini` |
 | `USE_MOCK_GEMINI` | Use mock service (overrides LLM_SERVICE_TYPE) | `false` |
 | `TWITTER_BEARER_TOKEN` | Your Twitter API Bearer Token (optional) | - |
 | `OBSIDIAN_NOTES_PATH` | Directory containing your notes | `./notes` |

@@ -18,13 +18,9 @@ dotenv.config();
 
 const config = {
   // LLM Service configuration
-  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api', 'cli', or 'mock'
+  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api' or 'mock'
   geminiApiKey: process.env.GEMINI_API_KEY,
   geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
-
-  // Legacy CLI configuration (for backward compatibility)
-  cliToolType: process.env.CLI_TOOL_TYPE || 'gemini',
-  cliCommand: process.env.CLI_COMMAND || (process.env.GEMINI_CLI_COMMAND || 'gemini'),
   useMockGemini: process.env.USE_MOCK_GEMINI === 'true',
 
   // Other configuration
@@ -208,20 +204,12 @@ async function main() {
     process.exit(1);
   }
 
-  if (serviceType === 'cli' && !config.cliCommand) {
-    logError('Error: CLI_COMMAND is required when LLM_SERVICE_TYPE is "cli"');
-    logError('Please set up your .env file (see .env.example) or ensure the CLI tool is in your PATH');
-    process.exit(1);
-  }
-
   // Create LLM service
   const geminiService = createGeminiService({
     useMock: config.useMockGemini,
     serviceType: serviceType,
     apiKey: config.geminiApiKey,
-    modelName: config.geminiModel,
-    cliCommand: config.cliCommand,
-    toolType: config.cliToolType
+    modelName: config.geminiModel
   });
 
   // Create Twitter service (optional)
@@ -234,8 +222,6 @@ async function main() {
   let serviceInfo = `${serviceType.toUpperCase()} (${serviceName})`;
   if (serviceType === 'api') {
     serviceInfo += ` - Model: ${config.geminiModel}`;
-  } else if (serviceType === 'cli') {
-    serviceInfo += ` - Command: ${config.cliCommand}`;
   }
   logInfo(`LLM Service: ${serviceInfo}`);
 
