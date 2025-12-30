@@ -108,6 +108,75 @@ describe('GeminiService', () => {
       expect(markdown).toContain('Untitled Article');
       expect(markdown).toContain('Content');
     });
+
+    test('handles HTML with multiple headings', async () => {
+      const html = '<h1>Main</h1><h2>Sub</h2><h3>SubSub</h3>';
+      const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com');
+
+      expect(markdown).toContain('Main');
+      expect(markdown).toContain('Sub');
+      expect(markdown).toContain('SubSub');
+    });
+
+    test('handles HTML with lists', async () => {
+      const html = '<ul><li>Item 1</li><li>Item 2</li></ul>';
+      const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com');
+
+      expect(markdown).toBeTruthy();
+      expect(markdown.length).toBeGreaterThan(0);
+    });
+
+    test('handles HTML with blockquotes', async () => {
+      const html = '<blockquote>Quote text</blockquote>';
+      const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com');
+
+      expect(markdown).toBeTruthy();
+      expect(markdown.length).toBeGreaterThan(0);
+    });
+
+    test('handles empty HTML', async () => {
+      const html = '';
+      const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com');
+
+      expect(markdown).toBeTruthy();
+      expect(typeof markdown).toBe('string');
+    });
+
+    test('handles HTML with script and style tags', async () => {
+      const html = '<script>alert("test")</script><style>body{}</style><p>Content</p>';
+      const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com');
+
+      expect(markdown).toBeTruthy();
+      expect(markdown).toContain('Content');
+    });
+
+    test('handles HTML with title tag', async () => {
+      const html = '<html><head><title>Page Title</title></head><body><p>Content</p></body></html>';
+      const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com');
+
+      expect(markdown).toBeTruthy();
+      expect(markdown).toContain('Page Title');
+    });
+
+    test('handles HTML with article tag', async () => {
+      const html = '<article><h1>Article Title</h1><p>Article content</p></article>';
+      const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com');
+
+      expect(markdown).toBeTruthy();
+      expect(markdown.length).toBeGreaterThan(0);
+    });
+
+    test('handles large HTML content', async () => {
+      const html = '<p>' + 'Content '.repeat(1000) + '</p>';
+      const markdown = await service.convertHtmlToMarkdown(html, 'https://example.com');
+
+      expect(markdown).toBeTruthy();
+      expect(markdown.length).toBeGreaterThan(0);
+    });
+
+    test('returns service name', () => {
+      expect(service.getServiceName()).toBe('MockGemini');
+    });
   });
 
   describe.skip('Real GeminiService', () => {
