@@ -17,9 +17,13 @@ import { logger, logSuccess, logError, logWarning, logInfo, logBold, colors } fr
 dotenv.config();
 
 const config = {
-  cliToolType: process.env.CLI_TOOL_TYPE || 'gemini',
-  cliCommand: process.env.CLI_COMMAND || (process.env.GEMINI_CLI_COMMAND || 'gemini'),
+  // LLM Service configuration
+  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api' or 'mock'
+  geminiApiKey: process.env.GEMINI_API_KEY,
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
   useMockGemini: process.env.USE_MOCK_GEMINI === 'true',
+
+  // Other configuration
   twitterBearerToken: process.env.TWITTER_BEARER_TOKEN,
   notesPath: process.env.OBSIDIAN_NOTES_PATH || './notes',
   dryRun: process.env.DRY_RUN === 'true'
@@ -192,20 +196,35 @@ async function main() {
   logBold('Obsidian to Article Converter\n');
 
   // Validate configuration
-  if (!config.useMockGemini && !config.cliCommand) {
-    logError('Error: CLI_COMMAND is required when USE_MOCK_GEMINI is not true');
-    logError('Please set up your .env file (see .env.example) or ensure the CLI tool is in your PATH');
+  const serviceType = config.useMockGemini ? 'mock' : config.serviceType;
+
+  if (serviceType === 'api' && !config.geminiApiKey) {
+    logError('Error: GEMINI_API_KEY is required when LLM_SERVICE_TYPE is "api"');
+    logError('Please set GEMINI_API_KEY in your .env file');
     process.exit(1);
   }
 
-  // Create Gemini service
-  const geminiService = createGeminiService(config.useMockGemini, config.cliCommand, config.cliToolType);
+  // Create LLM service
+  const geminiService = createGeminiService({
+    useMock: config.useMockGemini,
+    serviceType: serviceType,
+    apiKey: config.geminiApiKey,
+    modelName: config.geminiModel
+  });
 
   // Create Twitter service (optional)
   const twitterService = createTwitterService(config.twitterBearerToken);
 
   logInfo(`Notes path: ${config.notesPath}`);
-  logInfo(`CLI Tool: ${config.useMockGemini ? 'MOCK' : `${config.cliToolType.toUpperCase()} (${config.cliCommand})`}`);
+
+  // Display service information
+  const serviceName = geminiService.getServiceName();
+  let serviceInfo = `${serviceType.toUpperCase()} (${serviceName})`;
+  if (serviceType === 'api') {
+    serviceInfo += ` - Model: ${config.geminiModel}`;
+  }
+  logInfo(`LLM Service: ${serviceInfo}`);
+
   logInfo(`Twitter API: ${twitterService ? 'ENABLED' : 'DISABLED (no bearer token)'}`);
   logInfo(`Dry run: ${config.dryRun ? 'ENABLED (no files will be modified)' : 'DISABLED'}\n`);
 
