@@ -44,12 +44,12 @@ End of notes.`;
     await fs.writeFile(testFile, originalContent, 'utf-8');
 
     // Import modules after mocking
-    const { createGeminiService } = await import('../geminiService.js');
+    const { createLLMService } = await import('../llmServiceFactory.js');
     const { createTwitterService } = await import('../twitterService.js');
     const { extractUrls, shouldIgnoreUrl, isTwitterUrl, fetchUrlContent } = await import('../utils.js');
 
     // Create services
-    const geminiService = createGeminiService(true); // Use mock
+    const geminiService = createLLMService(true); // Use mock
     const twitterService = createTwitterService(); // No token
 
     // Simulate processNote logic
@@ -135,10 +135,10 @@ End.`;
     await fs.writeFile(testFile, originalContent, 'utf-8');
 
     // Simulate dry run (don't write back to file)
-    const { createGeminiService } = await import('../geminiService.js');
+    const { createLLMService } = await import('../llmServiceFactory.js');
     const { extractUrls, shouldIgnoreUrl, isTwitterUrl, fetchUrlContent } = await import('../utils.js');
 
-    const geminiService = createGeminiService(true);
+    const geminiService = createLLMService(true);
     
     let content = await fs.readFile(testFile, 'utf-8');
     const urls = extractUrls(content);
