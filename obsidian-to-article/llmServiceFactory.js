@@ -34,7 +34,7 @@ export function createLLMService(configOrUseMock = {}) {
   if (typeof configOrUseMock === 'boolean') {
     config = {
       useMock: configOrUseMock,
-      serviceType: 'mock'
+      serviceType: configOrUseMock ? 'mock' : 'api'
     };
   } else {
     config = configOrUseMock;

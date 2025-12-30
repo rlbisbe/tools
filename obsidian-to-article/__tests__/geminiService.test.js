@@ -51,7 +51,7 @@ describe('GeminiService', () => {
 
     test('throws error for invalid service type', () => {
       expect(() => createLLMService({ serviceType: 'invalid' })).toThrow(
-        'Invalid serviceType: invalid. Must be one of: api, mock'
+        'Invalid serviceType: invalid. Must be one of: api, mock, ollama'
       );
     });
 
