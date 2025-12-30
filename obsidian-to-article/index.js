@@ -18,10 +18,14 @@ dotenv.config();
 
 const config = {
   // LLM Service configuration
-  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api' or 'mock'
+  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api', 'ollama', or 'mock'
   geminiApiKey: process.env.GEMINI_API_KEY,
   geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
   useMockGemini: process.env.USE_MOCK_GEMINI === 'true',
+
+  // Ollama configuration
+  ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+  ollamaModel: process.env.OLLAMA_MODEL || 'llama2',
 
   // Other configuration
   twitterBearerToken: process.env.TWITTER_BEARER_TOKEN,
@@ -209,7 +213,9 @@ async function main() {
     useMock: config.useMockGemini,
     serviceType: serviceType,
     apiKey: config.geminiApiKey,
-    modelName: config.geminiModel
+    modelName: config.geminiModel,
+    ollamaBaseUrl: config.ollamaBaseUrl,
+    ollamaModel: config.ollamaModel
   });
 
   // Create Twitter service (optional)

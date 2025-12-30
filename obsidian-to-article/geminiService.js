@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { LLMService } from './llmService.js';
 import { GeminiApiService } from './geminiApiService.js';
+import { OllamaService } from './ollamaService.js';
 import { colors } from './logger.js';
 
 /**
@@ -106,7 +107,9 @@ export function createGeminiService(configOrUseMock = {}) {
     useMock = false,
     serviceType = 'api',
     apiKey = null,
-    modelName = 'gemini-1.5-flash'
+    modelName = 'gemini-1.5-flash',
+    ollamaBaseUrl = 'http://localhost:11434',
+    ollamaModel = 'llama2'
   } = config;
 
   // Legacy support: if useMock is true, return mock service
@@ -125,7 +128,10 @@ export function createGeminiService(configOrUseMock = {}) {
       }
       return new GeminiApiService(apiKey, modelName);
 
+    case 'ollama':
+      return new OllamaService(ollamaBaseUrl, ollamaModel);
+
     default:
-      throw new Error(`Invalid serviceType: ${serviceType}. Must be one of: api, mock`);
+      throw new Error(`Invalid serviceType: ${serviceType}. Must be one of: api, mock, ollama`);
   }
 }
