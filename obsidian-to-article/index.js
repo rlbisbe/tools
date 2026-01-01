@@ -11,6 +11,7 @@ import {
   isTwitterUrl,
   fetchUrlContent
 } from './utils.js';
+import { ensureIsArticle } from './contentValidator.js';
 import { logger, logSuccess, logError, logWarning, logInfo, logBold, colors } from './logger.js';
 
 // Load environment variables
@@ -119,6 +120,11 @@ async function processNote(filePath, llmService, twitterService) {
         const html = await fetchUrlContent(url);
         const fetchTime = Date.now() - fetchStart;
 
+        // Validate that the content is an article (not e-commerce, login page, etc.)
+        console.log(colors.cyan(`  Validating article content...`));
+        ensureIsArticle(html, url);
+        console.log(colors.dim(`  ✓ Content validated as article`));
+
         console.log(colors.cyan(`  Converting to Markdown... (fetch: ${fetchTime}ms)`));
         const geminiStart = Date.now();
         markdown = await llmService.convertHtmlToMarkdown(html, url);
@@ -147,13 +153,23 @@ async function processNote(filePath, llmService, twitterService) {
       logSuccess(`  Replaced URL with content`);
 
     } catch (error) {
-      logError(`  Failed to process ${url}: ${error.message}`);
-      await logger.error('URL processing failed', {
-        file: path.basename(filePath),
-        url,
-        error: error.message,
-        stack: error.stack
-      });
+      // Provide user-friendly message for non-article content
+      if (error.code === 'NON_ARTICLE_CONTENT') {
+        logWarning(`  Skipping ${url}: ${error.reason}`);
+        await logger.info('Non-article content skipped', {
+          file: path.basename(filePath),
+          url,
+          reason: error.reason
+        });
+      } else {
+        logError(`  Failed to process ${url}: ${error.message}`);
+        await logger.error('URL processing failed', {
+          file: path.basename(filePath),
+          url,
+          error: error.message,
+          stack: error.stack
+        });
+      }
       return;
     }
 
