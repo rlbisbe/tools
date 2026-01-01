@@ -127,10 +127,78 @@ describe('LLMServiceFactory', () => {
       });
     });
 
+    describe('OpenRouter service creation', () => {
+      test('creates OpenRouter service with valid config', () => {
+        const service = createLLMService({
+          serviceType: 'openrouter',
+          openrouterApiKey: 'test-api-key'
+        });
+        expect(service).toBeDefined();
+        expect(service.getServiceName()).toBe('OpenRouter');
+      });
+
+      test('creates OpenRouter service with custom model', () => {
+        const service = createLLMService({
+          serviceType: 'openrouter',
+          openrouterApiKey: 'test-key',
+          openrouterModel: 'anthropic/claude-2'
+        });
+        expect(service).toBeDefined();
+        expect(service.model).toBe('anthropic/claude-2');
+      });
+
+      test('uses default model when not specified', () => {
+        const service = createLLMService({
+          serviceType: 'openrouter',
+          openrouterApiKey: 'test-key'
+        });
+        expect(service.model).toBe('openai/gpt-3.5-turbo');
+      });
+
+      test('throws error when openrouterApiKey is missing', () => {
+        expect(() => createLLMService({ serviceType: 'openrouter' }))
+          .toThrow('openrouterApiKey is required for OpenRouter service');
+      });
+
+      test('throws error when openrouterApiKey is null', () => {
+        expect(() => createLLMService({
+          serviceType: 'openrouter',
+          openrouterApiKey: null
+        })).toThrow('openrouterApiKey is required for OpenRouter service');
+      });
+
+      test('throws error when openrouterApiKey is empty string', () => {
+        expect(() => createLLMService({
+          serviceType: 'openrouter',
+          openrouterApiKey: ''
+        })).toThrow('openrouterApiKey is required for OpenRouter service');
+      });
+
+      test('OpenRouter service has correct methods', () => {
+        const service = createLLMService({
+          serviceType: 'openrouter',
+          openrouterApiKey: 'test-key'
+        });
+        expect(service.convertHtmlToMarkdown).toBeDefined();
+        expect(service.getServiceName).toBeDefined();
+        expect(typeof service.convertHtmlToMarkdown).toBe('function');
+        expect(typeof service.getServiceName).toBe('function');
+      });
+
+      test('creates OpenRouter service with meta-llama model', () => {
+        const service = createLLMService({
+          serviceType: 'openrouter',
+          openrouterApiKey: 'test-key',
+          openrouterModel: 'meta-llama/llama-2-70b-chat'
+        });
+        expect(service.model).toBe('meta-llama/llama-2-70b-chat');
+      });
+    });
+
     describe('service type validation', () => {
       test('throws error for invalid service type', () => {
         expect(() => createLLMService({ serviceType: 'invalid' }))
-          .toThrow('Invalid serviceType: invalid. Must be one of: api, mock, ollama');
+          .toThrow('Invalid serviceType: invalid. Must be one of: api, mock, ollama, openrouter');
       });
 
       test('throws error for unknown service type', () => {
@@ -150,6 +218,12 @@ describe('LLMServiceFactory', () => {
 
         const ollamaService = createLLMService({ serviceType: 'OLLAMA' });
         expect(ollamaService.getServiceName()).toBe('Ollama');
+
+        const openrouterService = createLLMService({
+          serviceType: 'OPENROUTER',
+          openrouterApiKey: 'test-key'
+        });
+        expect(openrouterService.getServiceName()).toBe('OpenRouter');
       });
     });
 
@@ -207,20 +281,24 @@ describe('LLMServiceFactory', () => {
         const mock = createLLMService({ serviceType: 'mock' });
         const api = createLLMService({ serviceType: 'api', apiKey: 'key' });
         const ollama = createLLMService({ serviceType: 'ollama' });
+        const openrouter = createLLMService({ serviceType: 'openrouter', openrouterApiKey: 'key' });
 
         expect(mock.convertHtmlToMarkdown).toBeDefined();
         expect(api.convertHtmlToMarkdown).toBeDefined();
         expect(ollama.convertHtmlToMarkdown).toBeDefined();
+        expect(openrouter.convertHtmlToMarkdown).toBeDefined();
       });
 
       test('all services have getServiceName', () => {
         const mock = createLLMService({ serviceType: 'mock' });
         const api = createLLMService({ serviceType: 'api', apiKey: 'key' });
         const ollama = createLLMService({ serviceType: 'ollama' });
+        const openrouter = createLLMService({ serviceType: 'openrouter', openrouterApiKey: 'key' });
 
         expect(mock.getServiceName).toBeDefined();
         expect(api.getServiceName).toBeDefined();
         expect(ollama.getServiceName).toBeDefined();
+        expect(openrouter.getServiceName).toBeDefined();
       });
     });
   });
