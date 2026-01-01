@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { chromium } from 'playwright';
 import { colors } from './logger.js';
 
 /**
@@ -70,7 +71,53 @@ export function shouldIgnoreUrl(url) {
 }
 
 /**
+ * Fetch HTML content using Playwright (headless browser)
+ * Used as fallback when axios fails with 403 errors
+ */
+async function fetchWithHeadlessBrowser(url) {
+  let browser = null;
+  try {
+    console.log(colors.dim(`Using headless browser for: ${url}`));
+
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu'
+      ]
+    });
+
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      viewport: { width: 1920, height: 1080 }
+    });
+
+    const page = await context.newPage();
+
+    // Navigate to the page and wait for network to be idle
+    await page.goto(url, {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+
+    // Get the HTML content
+    const content = await page.content();
+
+    return content;
+
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+/**
  * Fetch HTML content from a URL
+ * Tries axios first, falls back to headless browser on 403 errors
  */
 export async function fetchUrlContent(url) {
   try {
@@ -87,6 +134,17 @@ export async function fetchUrlContent(url) {
     return response.data;
 
   } catch (error) {
+    // If we get a 403 Forbidden error, try with headless browser
+    if (error.response && error.response.status === 403) {
+      console.log(colors.warning(`Got 403 error, retrying with headless browser...`));
+      try {
+        return await fetchWithHeadlessBrowser(url);
+      } catch (browserError) {
+        console.log(colors.error(`Headless browser also failed: ${browserError.message}`));
+        throw browserError;
+      }
+    }
+
     console.log(colors.error(`Error fetching ${url}: ${error.message}`));
     throw error;
   }
