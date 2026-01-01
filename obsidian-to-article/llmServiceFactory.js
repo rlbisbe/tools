@@ -1,6 +1,7 @@
 import { MockLLMService } from './mockLlmService.js';
 import { GeminiApiService } from './geminiApiService.js';
 import { OllamaService } from './ollamaService.js';
+import { OpenRouterService } from './openrouterService.js';
 
 /**
  * Factory function to create the appropriate LLM service
@@ -25,6 +26,13 @@ import { OllamaService } from './ollamaService.js';
  *   ollamaModel: 'llama2'
  * });
  *
+ * // OpenRouter
+ * const service = createLLMService({
+ *   serviceType: 'openrouter',
+ *   openrouterApiKey: 'your-key',
+ *   openrouterModel: 'openai/gpt-3.5-turbo'
+ * });
+ *
  * // Legacy boolean signature
  * const service = createLLMService(true); // returns mock
  */
@@ -46,7 +54,9 @@ export function createLLMService(configOrUseMock = {}) {
     apiKey = null,
     modelName = 'gemini-1.5-flash',
     ollamaBaseUrl = 'http://localhost:11434',
-    ollamaModel = 'llama2'
+    ollamaModel = 'llama2',
+    openrouterApiKey = null,
+    openrouterModel = 'openai/gpt-3.5-turbo'
   } = config;
 
   // Legacy support: if useMock is true, return mock service
@@ -68,7 +78,13 @@ export function createLLMService(configOrUseMock = {}) {
     case 'ollama':
       return new OllamaService(ollamaBaseUrl, ollamaModel);
 
+    case 'openrouter':
+      if (!openrouterApiKey) {
+        throw new Error('openrouterApiKey is required for OpenRouter service');
+      }
+      return new OpenRouterService(openrouterApiKey, openrouterModel);
+
     default:
-      throw new Error(`Invalid serviceType: ${serviceType}. Must be one of: api, mock, ollama`);
+      throw new Error(`Invalid serviceType: ${serviceType}. Must be one of: api, mock, ollama, openrouter`);
   }
 }

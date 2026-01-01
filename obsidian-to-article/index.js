@@ -18,7 +18,7 @@ dotenv.config();
 
 const config = {
   // LLM Service configuration
-  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api', 'ollama', or 'mock'
+  serviceType: process.env.LLM_SERVICE_TYPE || 'api', // 'api', 'ollama', 'openrouter', or 'mock'
   geminiApiKey: process.env.GEMINI_API_KEY,
   geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
   useMockGemini: process.env.USE_MOCK_GEMINI === 'true',
@@ -26,6 +26,10 @@ const config = {
   // Ollama configuration
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
   ollamaModel: process.env.OLLAMA_MODEL || 'llama2',
+
+  // OpenRouter configuration
+  openrouterApiKey: process.env.OPENROUTER_API_KEY,
+  openrouterModel: process.env.OPENROUTER_MODEL || 'openai/gpt-3.5-turbo',
 
   // Other configuration
   twitterBearerToken: process.env.TWITTER_BEARER_TOKEN,
@@ -208,6 +212,12 @@ async function main() {
     process.exit(1);
   }
 
+  if (serviceType === 'openrouter' && !config.openrouterApiKey) {
+    logError('Error: OPENROUTER_API_KEY is required when LLM_SERVICE_TYPE is "openrouter"');
+    logError('Please set OPENROUTER_API_KEY in your .env file');
+    process.exit(1);
+  }
+
   // Create LLM service
   const llmService = createLLMService({
     useMock: config.useMockGemini,
@@ -215,7 +225,9 @@ async function main() {
     apiKey: config.geminiApiKey,
     modelName: config.geminiModel,
     ollamaBaseUrl: config.ollamaBaseUrl,
-    ollamaModel: config.ollamaModel
+    ollamaModel: config.ollamaModel,
+    openrouterApiKey: config.openrouterApiKey,
+    openrouterModel: config.openrouterModel
   });
 
   // Create Twitter service (optional)
