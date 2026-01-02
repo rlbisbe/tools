@@ -6,12 +6,14 @@ on:
     paths:
       - 'obsidian-to-article/**'
       - 'obsidian-url-extractor/**'
+      - 'obsidian-todo-archive/**'
       - '.github/workflows/test.yml'
   pull_request:
     branches: [ main, master ]
     paths:
       - 'obsidian-to-article/**'
       - 'obsidian-url-extractor/**'
+      - 'obsidian-todo-archive/**'
       - '.github/workflows/test.yml'
 
 jobs:
@@ -23,18 +25,14 @@ jobs:
       run:
         working-directory: ./obsidian-to-article
 
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js 20.x
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 20.x
           cache: 'npm'
           cache-dependency-path: obsidian-to-article/package-lock.json
 
@@ -57,7 +55,7 @@ jobs:
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
-        if: matrix.node-version == '20.x' && always()
+        if: always()
         with:
           files: ./obsidian-to-article/coverage/lcov.info
           flags: article-converter
@@ -69,7 +67,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-article-converter-node-${{ matrix.node-version }}
+          name: test-results-article-converter
           path: |
             obsidian-to-article/coverage/
             obsidian-to-article/__tests__/
@@ -83,18 +81,14 @@ jobs:
       run:
         working-directory: ./obsidian-url-extractor
 
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js 20.x
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 20.x
           cache: 'npm'
           cache-dependency-path: obsidian-url-extractor/package-lock.json
 
@@ -116,7 +110,7 @@ jobs:
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
-        if: matrix.node-version == '20.x' && always()
+        if: always()
         with:
           files: ./obsidian-url-extractor/coverage/lcov.info
           flags: url-extractor
@@ -128,9 +122,65 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-url-extractor-node-${{ matrix.node-version }}
+          name: test-results-url-extractor
           path: |
             obsidian-url-extractor/coverage/
             obsidian-url-extractor/__tests__/
             obsidian-url-extractor/dist/
+          retention-days: 30
+
+  test-todo-archive:
+    name: Test Obsidian Todo Archive
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./obsidian-todo-archive
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: obsidian-todo-archive/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Run tests
+        run: npm test -- --verbose
+        env:
+          CI: true
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+        env:
+          CI: true
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./obsidian-todo-archive/coverage/lcov.info
+          flags: todo-archive
+          name: codecov-todo-archive
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-todo-archive
+          path: |
+            obsidian-todo-archive/coverage/
+            obsidian-todo-archive/__tests__/
+            obsidian-todo-archive/dist/
           retention-days: 30
