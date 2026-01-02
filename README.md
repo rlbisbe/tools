@@ -51,11 +51,39 @@ npm start
 
 [Full Documentation](./obsidian-to-article/README.md)
 
+### 3. Obsidian Todo Archive
+Archive Obsidian todo lists with timestamps and preserve incomplete tasks for the next session.
+
+**Location:** `obsidian-todo-archive/`
+
+**Technology:** TypeScript
+
+**Features:**
+- Archives complete todo list to a timestamped file
+- Preserves incomplete tasks in the current todo file
+- Adds a link to the archive in the new todo file
+- Prevents overwriting existing archives
+- Supports any markdown todo format
+- Full type safety with TypeScript
+
+**Quick Start:**
+```bash
+cd obsidian-todo-archive
+npm install
+npm run build
+cp .env.example .env
+# Edit .env with your paths
+npm start
+```
+
+[Full Documentation](./obsidian-todo-archive/README.md)
+
 ## Workflow Suggestion
 
 These tools work well together:
 1. Use **Obsidian URL Extractor** to organize URLs from your todo list into individual notes
 2. Use **Obsidian to Article Converter** to transform those URL notes into full articles
+3. Use **Obsidian Todo Archive** to archive completed tasks and start fresh with incomplete ones
 
 ## Contributing
 
