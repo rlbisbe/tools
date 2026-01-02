@@ -72,7 +72,7 @@ export function shouldIgnoreUrl(url) {
 
 /**
  * Fetch HTML content using Playwright (headless browser)
- * Used as fallback when axios fails with 403 errors
+ * Used as fallback when axios fails with 4xx client errors (401, 403, 429, etc.)
  */
 async function fetchWithHeadlessBrowser(url) {
   let browser = null;
@@ -117,7 +117,7 @@ async function fetchWithHeadlessBrowser(url) {
 
 /**
  * Fetch HTML content from a URL
- * Tries axios first, falls back to headless browser on 403 errors
+ * Tries axios first, falls back to headless browser on 4xx errors
  */
 export async function fetchUrlContent(url) {
   try {
@@ -134,9 +134,10 @@ export async function fetchUrlContent(url) {
     return response.data;
 
   } catch (error) {
-    // If we get a 403 Forbidden error, try with headless browser
-    if (error.response && error.response.status === 403) {
-      console.log(colors.warning(`Got 403 error, retrying with headless browser...`));
+    // If we get a 4xx client error (401, 403, 429, etc.), try with headless browser
+    // These errors typically indicate blocking of automated requests
+    if (error.response && error.response.status >= 400 && error.response.status < 500) {
+      console.log(colors.warning(`Got ${error.response.status} error, retrying with headless browser...`));
       try {
         return await fetchWithHeadlessBrowser(url);
       } catch (browserError) {
