@@ -18,14 +18,17 @@ function notifyClients() {
   }
 }
 
-function renderPage(title, bodyHtml, extraHead = '') {
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderPage(title, bodyHtml) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
-  ${extraHead}
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -149,22 +152,12 @@ function renderPage(title, bodyHtml, extraHead = '') {
     const evtSource = new EventSource('/_sse');
     evtSource.onmessage = (e) => {
       if (e.data === 'reload') {
-        const indicator = document.getElementById('reload-indicator');
         window.location.reload();
-        indicator.classList.add('visible');
-        setTimeout(() => indicator.classList.remove('visible'), 2000);
       }
-    };
-    evtSource.onerror = () => {
-      // Silently reconnect - browser handles this automatically
     };
   </script>
 </body>
 </html>`;
-}
-
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function listMarkdownFiles(dir) {
@@ -174,104 +167,107 @@ function listMarkdownFiles(dir) {
     .sort();
 }
 
-function serveIndex(res) {
-  const files = listMarkdownFiles(DOCS_DIR);
-  const items = files.length
-    ? files.map(f => {
-        const name = f.replace(/\.md$/, '');
-        return `<li><a href="/${encodeURIComponent(f)}"><span class="icon">📝</span>${escapeHtml(name)}</a></li>`;
-      }).join('\n')
-    : '<li style="padding:0.75rem 0; color:#6a737d;">No markdown files found in <code>docs/</code></li>';
+function createRequestHandler(docsDir) {
+  return function handler(req, res) {
+    const url = new URL(req.url, `http://localhost`);
+    let pathname;
+    try {
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      res.end('Bad Request');
+      return;
+    }
 
-  const html = renderPage('Index', `
-    <h2 style="margin-bottom:1rem;">📁 Documents</h2>
-    <ul class="file-list">${items}</ul>
-  `);
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-  res.end(html);
+    if (pathname === '/_sse') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      res.write(': connected\n\n');
+      sseClients.add(res);
+      res.on('close', () => sseClients.delete(res));
+      return;
+    }
+
+    if (pathname === '/' || pathname === '') {
+      const files = listMarkdownFiles(docsDir);
+      const items = files.length
+        ? files.map(f => {
+            const name = f.replace(/\.md$/, '');
+            return `<li><a href="/${encodeURIComponent(f)}"><span class="icon">📝</span>${escapeHtml(name)}</a></li>`;
+          }).join('\n')
+        : '<li style="padding:0.75rem 0; color:#6a737d;">No markdown files found in <code>docs/</code></li>';
+      const html = renderPage('Index', `<h2 style="margin-bottom:1rem;">📁 Documents</h2><ul class="file-list">${items}</ul>`);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
+    }
+
+    const filename = pathname.replace(/^\//, '');
+    if (filename.endsWith('.md') && !filename.includes('/') && !filename.includes('\\')) {
+      const filePath = path.join(docsDir, filename);
+      const resolvedDocsDir = path.resolve(docsDir);
+
+      // Security: ensure the resolved path stays within docsDir
+      if (!filePath.startsWith(resolvedDocsDir + path.sep) &&
+          filePath !== resolvedDocsDir) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('Forbidden');
+        return;
+      }
+
+      if (!fs.existsSync(filePath)) {
+        res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(renderPage('Not Found', '<p>File not found.</p>'));
+        return;
+      }
+
+      const raw = fs.readFileSync(filePath, 'utf8');
+      const rendered = marked.parse(raw);
+      const title = filename.replace(/\.md$/, '');
+      const html = renderPage(title, `<div class="markdown-body">${rendered}</div>`);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
+    }
+
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not found');
+  };
 }
 
-function serveMarkdown(filename, res) {
-  const filePath = path.join(DOCS_DIR, filename);
+const server = http.createServer(createRequestHandler(DOCS_DIR));
 
-  // Security: ensure the resolved path stays within DOCS_DIR
-  if (!filePath.startsWith(path.resolve(DOCS_DIR) + path.sep) &&
-      filePath !== path.resolve(DOCS_DIR)) {
-    res.writeHead(403);
-    res.end('Forbidden');
-    return;
+// Start server and watcher only when run directly
+if (require.main === module) {
+  if (!fs.existsSync(DOCS_DIR)) {
+    fs.mkdirSync(DOCS_DIR, { recursive: true });
   }
 
-  if (!fs.existsSync(filePath)) {
-    res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(renderPage('Not Found', '<p>File not found.</p>'));
-    return;
-  }
-
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const rendered = marked.parse(raw);
-  const title = filename.replace(/\.md$/, '');
-  const html = renderPage(title, `<div class="markdown-body">${rendered}</div>`);
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-  res.end(html);
-}
-
-function serveSSE(res) {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
+  const watcher = chokidar.watch(DOCS_DIR, {
+    ignoreInitial: true,
+    awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
   });
-  res.write(': connected\n\n');
-  sseClients.add(res);
-  res.on('close', () => sseClients.delete(res));
+
+  watcher.on('all', (event, filePath) => {
+    console.log(`[watcher] ${event}: ${path.relative(DOCS_DIR, filePath)}`);
+    notifyClients();
+  });
+
+  server.listen(PORT, () => {
+    console.log(`Markdown server running at http://localhost:${PORT}`);
+    console.log(`Serving files from: ${DOCS_DIR}`);
+    console.log(`Watching for changes...`);
+  });
+
+  process.on('SIGINT', () => {
+    watcher.close();
+    server.close();
+    process.exit(0);
+  });
 }
 
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url, `http://localhost:${PORT}`);
-  const pathname = decodeURIComponent(url.pathname);
-
-  if (pathname === '/_sse') {
-    return serveSSE(res);
-  }
-
-  if (pathname === '/' || pathname === '') {
-    return serveIndex(res);
-  }
-
-  const filename = pathname.replace(/^\//, '');
-  if (filename.endsWith('.md') && !filename.includes('/')) {
-    return serveMarkdown(filename, res);
-  }
-
-  res.writeHead(404, { 'Content-Type': 'text/plain' });
-  res.end('Not found');
-});
-
-// File watcher
-if (!fs.existsSync(DOCS_DIR)) {
-  fs.mkdirSync(DOCS_DIR, { recursive: true });
-}
-
-const watcher = chokidar.watch(DOCS_DIR, {
-  ignoreInitial: true,
-  awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
-});
-
-watcher.on('all', (event, filePath) => {
-  console.log(`[watcher] ${event}: ${path.relative(DOCS_DIR, filePath)}`);
-  notifyClients();
-});
-
-server.listen(PORT, () => {
-  console.log(`Markdown server running at http://localhost:${PORT}`);
-  console.log(`Serving files from: ${DOCS_DIR}`);
-  console.log(`Watching for changes...`);
-});
-
-process.on('SIGINT', () => {
-  watcher.close();
-  server.close();
-  process.exit(0);
-});
+module.exports = { server, createRequestHandler, escapeHtml, listMarkdownFiles, renderPage };

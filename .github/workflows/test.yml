@@ -7,6 +7,7 @@ on:
       - 'obsidian-to-article/**'
       - 'obsidian-url-extractor/**'
       - 'obsidian-todo-archive/**'
+      - 'markdown-server/**'
       - '.github/workflows/test.yml'
   pull_request:
     branches: [ main, master ]
@@ -14,6 +15,7 @@ on:
       - 'obsidian-to-article/**'
       - 'obsidian-url-extractor/**'
       - 'obsidian-todo-archive/**'
+      - 'markdown-server/**'
       - '.github/workflows/test.yml'
 
 jobs:
@@ -127,6 +129,58 @@ jobs:
             obsidian-url-extractor/coverage/
             obsidian-url-extractor/__tests__/
             obsidian-url-extractor/dist/
+          retention-days: 30
+
+  test-markdown-server:
+    name: Test Markdown Server
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./markdown-server
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: markdown-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --verbose
+        env:
+          CI: true
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+        env:
+          CI: true
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./markdown-server/coverage/lcov.info
+          flags: markdown-server
+          name: codecov-markdown-server
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-markdown-server
+          path: |
+            markdown-server/coverage/
+            markdown-server/__tests__/
           retention-days: 30
 
   test-todo-archive:
