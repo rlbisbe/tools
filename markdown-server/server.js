@@ -22,7 +22,115 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function renderPage(title, bodyHtml) {
+// ── Comment helpers ───────────────────────────────────────────────────────────
+
+function parseComments(raw) {
+  const comments = [];
+  const re = /<!--\s*@comment:\s*([\s\S]*?)-->/g;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    try { comments.push(JSON.parse(m[1].trim())); } catch {}
+  }
+  return comments;
+}
+
+function stripComments(raw) {
+  return raw.replace(/<!--\s*@comment:\s*[\s\S]*?-->/g, '');
+}
+
+// Map a character offset in stripComments(raw) back to an offset in raw,
+// skipping over any comment tags that sit between the two positions.
+function cleanPosToRawPos(raw, cleanPos) {
+  const re = /<!--\s*@comment:\s*[\s\S]*?-->/g;
+  const spans = [];
+  let m;
+  while ((m = re.exec(raw)) !== null) spans.push([m.index, m.index + m[0].length]);
+
+  let rawPos = 0, cp = 0;
+  while (rawPos < raw.length) {
+    if (cp === cleanPos) {
+      // Advance past any comment tag that starts exactly here
+      let jumped = true;
+      while (jumped) {
+        jumped = false;
+        for (const [s, e] of spans) {
+          if (s === rawPos) { rawPos = e; jumped = true; break; }
+        }
+      }
+      return rawPos;
+    }
+    // Skip comment tags
+    let skipped = false;
+    for (const [s, e] of spans) {
+      if (s === rawPos) { rawPos = e; skipped = true; break; }
+    }
+    if (!skipped) { cp++; rawPos++; }
+  }
+  return rawPos;
+}
+
+function insertComment(raw, anchor, commentText, before = '', after = '') {
+  const clean = stripComments(raw);
+
+  // Try progressively looser context matches
+  let anchorStart = -1;
+  const searches = [
+    before + anchor + after,
+    anchor + after,
+    before + anchor,
+    anchor,
+  ];
+  for (const s of searches) {
+    const i = clean.indexOf(s);
+    if (i !== -1) {
+      // anchor starts at i + (length of the before-portion of s)
+      const beforeLen = s.startsWith(before) ? before.length : 0;
+      anchorStart = i + beforeLen;
+      break;
+    }
+  }
+  if (anchorStart === -1) return null;
+
+  const insertAt = cleanPosToRawPos(raw, anchorStart + anchor.length);
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const payload = JSON.stringify({ id, anchor, before, after, text: commentText, date: new Date().toISOString().slice(0, 10) });
+  return raw.slice(0, insertAt) + `<!-- @comment: ${payload} -->` + raw.slice(insertAt);
+}
+
+function deleteComment(raw, id) {
+  const re = /<!--\s*@comment:\s*([\s\S]*?)-->/g;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    try {
+      if (JSON.parse(m[1].trim()).id === id) {
+        return raw.slice(0, m.index) + raw.slice(m.index + m[0].length);
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function editComment(raw, id, newText) {
+  const re = /<!--\s*@comment:\s*([\s\S]*?)-->/g;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    try {
+      const parsed = JSON.parse(m[1].trim());
+      if (parsed.id === id) {
+        const updated = JSON.stringify({ ...parsed, text: newText });
+        return raw.slice(0, m.index) + `<!-- @comment: ${updated} -->` + raw.slice(m.index + m[0].length);
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// ── Page renderer ─────────────────────────────────────────────────────────────
+
+function renderPage(title, bodyHtml, pageData) {
+  const commentsJson = pageData ? JSON.stringify(pageData.comments || []) : '[]';
+  const filenameJson = pageData ? JSON.stringify(pageData.filename || '') : '""';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,12 +138,62 @@ function renderPage(title, bodyHtml) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <style>
+    :root {
+      --bg:          #f6f8fa;
+      --surface:     #ffffff;
+      --border:      #e1e4e8;
+      --border-soft: #f0f0f0;
+      --text:        #24292e;
+      --text-muted:  #586069;
+      --text-faint:  #959da5;
+      --link:        #0366d6;
+      --link-hover:  #0258b6;
+      --code-bg:     #f3f4f6;
+      --th-bg:       #f6f8fa;
+      --blockquote:  #6a737d;
+      --blockquote-border: #dfe2e5;
+      --comment-hl:  #fff3cd;
+      --comment-hl-hover: #ffe8a1;
+      --comment-border: #f0ad4e;
+      --bubble-bg:   #24292e;
+      --btn-secondary-bg: #f3f4f6;
+      --btn-secondary-hover: #e9eaec;
+      --input-border: #e1e4e8;
+      --overlay-bg:  rgba(0,0,0,0.35);
+      --shadow:      0 8px 24px rgba(0,0,0,0.2);
+    }
+    [data-theme="dark"] {
+      --bg:          #0d1117;
+      --surface:     #161b22;
+      --border:      #30363d;
+      --border-soft: #21262d;
+      --text:        #c9d1d9;
+      --text-muted:  #8b949e;
+      --text-faint:  #6e7681;
+      --link:        #58a6ff;
+      --link-hover:  #79b8ff;
+      --code-bg:     #1c2128;
+      --th-bg:       #1c2128;
+      --blockquote:  #8b949e;
+      --blockquote-border: #3d4450;
+      --comment-hl:  #3d2e00;
+      --comment-hl-hover: #4d3a00;
+      --comment-border: #bb8009;
+      --bubble-bg:   #e6edf3;
+      --btn-secondary-bg: #21262d;
+      --btn-secondary-hover: #30363d;
+      --input-border: #30363d;
+      --overlay-bg:  rgba(0,0,0,0.6);
+      --shadow:      0 8px 24px rgba(0,0,0,0.5);
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       line-height: 1.6;
-      color: #24292e;
-      background: #f6f8fa;
+      color: var(--text);
+      background: var(--bg);
+      transition: background 0.2s, color 0.2s;
     }
     .container {
       max-width: 860px;
@@ -43,26 +201,38 @@ function renderPage(title, bodyHtml) {
       padding: 2rem 1.5rem;
     }
     header {
-      background: #fff;
-      border-bottom: 1px solid #e1e4e8;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
       padding: 1rem 1.5rem;
       display: flex;
       align-items: center;
       gap: 1rem;
     }
-    header a { text-decoration: none; color: #0366d6; font-weight: 600; }
+    header a { text-decoration: none; color: var(--link); font-weight: 600; }
     header a:hover { text-decoration: underline; }
-    .breadcrumb { color: #586069; font-size: 0.9rem; }
+    .breadcrumb { color: var(--text-muted); font-size: 0.9rem; }
     .breadcrumb span { margin: 0 0.4rem; }
+    #theme-toggle {
+      margin-left: auto;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+      font-size: 1rem;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+    #theme-toggle:hover { background: var(--code-bg); }
     .card {
-      background: #fff;
-      border: 1px solid #e1e4e8;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 6px;
       padding: 2rem;
       margin-top: 1.5rem;
     }
     .file-list { list-style: none; }
-    .file-list li { border-bottom: 1px solid #e1e4e8; }
+    .file-list li { border-bottom: 1px solid var(--border); }
     .file-list li:last-child { border-bottom: none; }
     .file-list a {
       display: flex;
@@ -70,7 +240,7 @@ function renderPage(title, bodyHtml) {
       gap: 0.6rem;
       padding: 0.75rem 0;
       text-decoration: none;
-      color: #0366d6;
+      color: var(--link);
       font-size: 1rem;
     }
     .file-list a:hover { text-decoration: underline; }
@@ -79,23 +249,24 @@ function renderPage(title, bodyHtml) {
     .markdown-body h4, .markdown-body h5, .markdown-body h6 {
       margin: 1.5rem 0 0.75rem;
       line-height: 1.3;
+      color: var(--text);
     }
-    .markdown-body h1 { font-size: 2rem; border-bottom: 1px solid #e1e4e8; padding-bottom: 0.5rem; }
-    .markdown-body h2 { font-size: 1.5rem; border-bottom: 1px solid #e1e4e8; padding-bottom: 0.3rem; }
+    .markdown-body h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .markdown-body h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
     .markdown-body h3 { font-size: 1.25rem; }
     .markdown-body p { margin: 0.75rem 0; }
     .markdown-body ul, .markdown-body ol { margin: 0.75rem 0 0.75rem 1.5rem; }
     .markdown-body li { margin: 0.25rem 0; }
     .markdown-body code {
-      background: #f3f4f6;
+      background: var(--code-bg);
       padding: 0.15rem 0.4rem;
       border-radius: 3px;
       font-family: 'SFMono-Regular', Consolas, monospace;
       font-size: 0.875em;
     }
     .markdown-body pre {
-      background: #f3f4f6;
-      border: 1px solid #e1e4e8;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
       border-radius: 6px;
       padding: 1rem;
       overflow-x: auto;
@@ -103,9 +274,9 @@ function renderPage(title, bodyHtml) {
     }
     .markdown-body pre code { background: none; padding: 0; }
     .markdown-body blockquote {
-      border-left: 4px solid #dfe2e5;
+      border-left: 4px solid var(--blockquote-border);
       padding: 0.25rem 1rem;
-      color: #6a737d;
+      color: var(--blockquote);
       margin: 1rem 0;
     }
     .markdown-body table {
@@ -114,13 +285,13 @@ function renderPage(title, bodyHtml) {
       margin: 1rem 0;
     }
     .markdown-body th, .markdown-body td {
-      border: 1px solid #e1e4e8;
+      border: 1px solid var(--border);
       padding: 0.5rem 0.75rem;
     }
-    .markdown-body th { background: #f6f8fa; font-weight: 600; }
-    .markdown-body a { color: #0366d6; }
+    .markdown-body th { background: var(--th-bg); font-weight: 600; }
+    .markdown-body a { color: var(--link); }
     .markdown-body img { max-width: 100%; }
-    .markdown-body hr { border: none; border-top: 1px solid #e1e4e8; margin: 1.5rem 0; }
+    .markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
     #reload-indicator {
       position: fixed;
       bottom: 1rem;
@@ -135,12 +306,195 @@ function renderPage(title, bodyHtml) {
       pointer-events: none;
     }
     #reload-indicator.visible { opacity: 1; }
+
+    /* ── Comments UI ──────────────────────────────────────────────────────── */
+    .comment-anchor {
+      background: var(--comment-hl);
+      border-bottom: 2px solid var(--comment-border);
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .comment-anchor:hover { background: var(--comment-hl-hover); }
+
+    #comment-toggle {
+      position: fixed;
+      top: 0.7rem;
+      right: 1rem;
+      background: var(--link);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 0.35rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+      z-index: 101;
+    }
+    #comment-toggle:hover { background: var(--link-hover); }
+
+    #comment-sidebar {
+      position: fixed;
+      right: 0; top: 0; bottom: 0;
+      width: 300px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform 0.25s ease;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+    #comment-sidebar.open { transform: translateX(0); }
+    #sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.95rem;
+      flex-shrink: 0;
+    }
+    #sidebar-close {
+      background: none;
+      border: none;
+      font-size: 1.1rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+    .sidebar-comment {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-soft);
+      cursor: pointer;
+    }
+    .sidebar-comment:hover { background: var(--code-bg); }
+    .sidebar-comment .sc-anchor {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-bottom: 0.3rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sidebar-comment .sc-text { font-size: 0.9rem; color: var(--text); }
+    .sidebar-comment .sc-date { font-size: 0.75rem; color: var(--text-faint); margin-top: 0.25rem; }
+    .sc-actions {
+      display: flex;
+      gap: 0.4rem;
+      margin-top: 0.4rem;
+    }
+    .sc-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.15rem 0.5rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+    .sc-btn:hover { background: var(--code-bg); color: var(--text); }
+    .sc-btn.delete:hover { background: #ffeef0; border-color: #f97583; color: #d73a49; }
+    [data-theme="dark"] .sc-btn.delete:hover { background: #3d1a1e; border-color: #f97583; }
+    .sidebar-empty {
+      padding: 2rem 1rem;
+      color: var(--text-muted);
+      text-align: center;
+      font-size: 0.9rem;
+    }
+
+    #comment-bubble {
+      position: absolute;
+      background: var(--bubble-bg);
+      color: var(--bg);
+      padding: 0.35rem 0.8rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      z-index: 200;
+      display: none;
+      white-space: nowrap;
+      user-select: none;
+      transform: translateX(-50%);
+    }
+    #comment-bubble::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--bubble-bg);
+      border-bottom: none;
+    }
+
+    #comment-form-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--overlay-bg);
+      z-index: 300;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #comment-form-overlay.open { display: flex; }
+    #comment-form {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      width: 380px;
+      box-shadow: var(--shadow);
+    }
+    #comment-form h3 { font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--text); }
+    #comment-anchor-preview {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-style: italic;
+      background: var(--code-bg);
+      border-radius: 4px;
+      padding: 0.4rem 0.6rem;
+      margin-bottom: 0.75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #comment-text-input {
+      width: 100%;
+      border: 1px solid var(--input-border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 0.5rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 80px;
+      margin-bottom: 0.75rem;
+    }
+    #comment-text-input:focus { outline: none; border-color: var(--link); }
+    .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+    .btn { border: none; border-radius: 4px; padding: 0.4rem 0.9rem; font-size: 0.85rem; cursor: pointer; }
+    .btn-primary { background: var(--link); color: white; }
+    .btn-primary:hover { background: var(--link-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: default; }
+    .btn-secondary { background: var(--btn-secondary-bg); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--btn-secondary-hover); }
   </style>
+  <script>
+    (function () {
+      const saved = localStorage.getItem('theme');
+      const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = saved || preferred;
+    })();
+  </script>
 </head>
 <body>
   <header>
     <a href="/">📄 Markdown Server</a>
     <span class="breadcrumb">${title !== 'Index' ? `<span>/</span> ${escapeHtml(title)}` : ''}</span>
+    <button id="theme-toggle" title="Toggle dark mode">🌙</button>
   </header>
   <div class="container">
     <div class="card">
@@ -148,6 +502,33 @@ function renderPage(title, bodyHtml) {
     </div>
   </div>
   <div id="reload-indicator">Reloaded</div>
+
+  ${pageData ? `
+  <button id="comment-toggle">💬 ${pageData.comments && pageData.comments.length ? pageData.comments.length + ' comment' + (pageData.comments.length !== 1 ? 's' : '') : 'Comments'}</button>
+
+  <div id="comment-sidebar">
+    <div id="sidebar-header">
+      <span>Comments</span>
+      <button id="sidebar-close" title="Close">✕</button>
+    </div>
+    <div id="sidebar-list"></div>
+  </div>
+
+  <div id="comment-bubble">💬 Add comment</div>
+
+  <div id="comment-form-overlay">
+    <div id="comment-form">
+      <h3 id="comment-form-title">Add comment</h3>
+      <div id="comment-anchor-preview"></div>
+      <textarea id="comment-text-input" placeholder="Write your comment…"></textarea>
+      <div class="form-actions">
+        <button class="btn btn-secondary" id="comment-cancel">Cancel</button>
+        <button class="btn btn-primary" id="comment-submit">Save</button>
+      </div>
+    </div>
+  </div>
+  ` : ''}
+
   <script>
     const evtSource = new EventSource('/_sse');
     evtSource.onmessage = (e) => {
@@ -155,7 +536,267 @@ function renderPage(title, bodyHtml) {
         window.location.reload();
       }
     };
+
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      function applyTheme(theme) {
+        document.documentElement.dataset.theme = theme;
+        btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+        localStorage.setItem('theme', theme);
+      }
+      applyTheme(document.documentElement.dataset.theme || 'light');
+      btn.addEventListener('click', () => {
+        applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+      });
+    })();
   </script>
+
+  ${pageData ? `
+  <script>
+  (function () {
+    const COMMENTS = ${commentsJson};
+    const FILE = ${filenameJson};
+
+    // ── Highlight anchors using context ──────────────────────────────────
+    function highlightComments() {
+      const body = document.querySelector('.markdown-body');
+      if (!body) return;
+
+      // Build a flat text map of all text nodes once
+      const nodeMap = [];
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      let fullText = '';
+      let node;
+      while ((node = walker.nextNode())) {
+        nodeMap.push({ node, start: fullText.length });
+        fullText += node.textContent;
+      }
+
+      function wrapAt(charIdx, len, commentIdx) {
+        const nm = nodeMap.find(n => n.start <= charIdx && charIdx < n.start + n.node.textContent.length);
+        if (!nm) return;
+        try {
+          const range = document.createRange();
+          const off = charIdx - nm.start;
+          range.setStart(nm.node, off);
+          range.setEnd(nm.node, off + len);
+          const span = document.createElement('span');
+          span.className = 'comment-anchor';
+          span.dataset.commentIdx = commentIdx;
+          range.surroundContents(span);
+          span.addEventListener('click', () => openSidebar(commentIdx));
+        } catch {}
+      }
+
+      COMMENTS.forEach((c, i) => {
+        const before = c.before || '';
+        const after  = c.after  || '';
+        // Try progressively looser matches, same order as server
+        const candidates = [
+          before + c.anchor + after,
+          c.anchor + after,
+          before + c.anchor,
+          c.anchor,
+        ];
+        for (const s of candidates) {
+          const idx = fullText.indexOf(s);
+          if (idx !== -1) {
+            const beforeLen = s.startsWith(before) ? before.length : 0;
+            wrapAt(idx + beforeLen, c.anchor.length, i);
+            break;
+          }
+        }
+      });
+    }
+
+    // Extract up to len chars of plain text before/after the selection
+    function getSelectionContext(sel, len = 30) {
+      const body = document.querySelector('.markdown-body');
+      if (!body || !sel.rangeCount) return { before: '', after: '' };
+      const range = sel.getRangeAt(0);
+      try {
+        const pre = document.createRange();
+        pre.setStart(body, 0);
+        pre.setEnd(range.startContainer, range.startOffset);
+        const before = pre.toString().slice(-len);
+
+        // Find the last text position in body for the post-range
+        const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+        let last = body;
+        while (walker.nextNode()) last = walker.currentNode;
+        const post = document.createRange();
+        post.setStart(range.endContainer, range.endOffset);
+        post.setEnd(last, last.nodeType === 3 ? last.length : 0);
+        const after = post.toString().slice(0, len);
+
+        return { before, after };
+      } catch { return { before: '', after: '' }; }
+    }
+
+    // ── Sidebar ───────────────────────────────────────────────────────────
+    const sidebar = document.getElementById('comment-sidebar');
+    const sidebarList = document.getElementById('sidebar-list');
+
+    function renderSidebar() {
+      if (!COMMENTS.length) {
+        sidebarList.innerHTML = '<p class="sidebar-empty">No comments yet.<br>Select text to add one.</p>';
+        return;
+      }
+      sidebarList.innerHTML = COMMENTS.map((c, i) => \`
+        <div class="sidebar-comment" data-idx="\${i}">
+          <div class="sc-anchor">"\${c.anchor.slice(0, 60)}\${c.anchor.length > 60 ? '\\u2026' : ''}"</div>
+          <div class="sc-text">\${c.text}</div>
+          <div class="sc-date">\${c.date || ''}</div>
+          <div class="sc-actions">
+            <button class="sc-btn edit" data-idx="\${i}">Edit</button>
+            <button class="sc-btn delete" data-idx="\${i}">Delete</button>
+          </div>
+        </div>
+      \`).join('');
+      sidebarList.querySelectorAll('.sidebar-comment').forEach(el => {
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('.sc-actions')) return;
+          const anchor = document.querySelector(\`.comment-anchor[data-comment-idx="\${el.dataset.idx}"]\`);
+          if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      });
+      sidebarList.querySelectorAll('.sc-btn.edit').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const c = COMMENTS[parseInt(btn.dataset.idx)];
+          openCommentForm(c.anchor, c.text, c.before, c.after, c.id);
+        });
+      });
+      sidebarList.querySelectorAll('.sc-btn.delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const c = COMMENTS[parseInt(btn.dataset.idx)];
+          if (!confirm(\`Delete comment on "\${c.anchor.slice(0, 60)}\${c.anchor.length > 60 ? '\\u2026' : ''}"?\`)) return;
+          try {
+            const res = await fetch('/_comment', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ file: FILE, id: c.id }),
+            });
+            const data = await res.json();
+            if (!data.ok) alert('Could not delete: ' + (data.error || 'unknown error'));
+          } catch (err) {
+            alert('Error: ' + err.message);
+          }
+        });
+      });
+    }
+
+    function openSidebar(scrollToIdx) {
+      sidebar.classList.add('open');
+      if (scrollToIdx !== undefined) {
+        setTimeout(() => {
+          const el = sidebarList.querySelector(\`[data-idx="\${scrollToIdx}"]\`);
+          if (el) el.scrollIntoView({ block: 'nearest' });
+        }, 50);
+      }
+    }
+
+    document.getElementById('comment-toggle').addEventListener('click', () => sidebar.classList.toggle('open'));
+    document.getElementById('sidebar-close').addEventListener('click', () => sidebar.classList.remove('open'));
+
+    // ── Selection bubble ──────────────────────────────────────────────────
+    const bubble = document.getElementById('comment-bubble');
+    let pendingAnchor = null;
+
+    document.addEventListener('mouseup', (e) => {
+      if (e.target.closest('#comment-sidebar') || e.target.closest('#comment-form-overlay')) return;
+      setTimeout(() => {
+        const sel = window.getSelection();
+        const text = sel ? sel.toString().trim() : '';
+        const mdBody = document.querySelector('.markdown-body');
+        if (text && mdBody && mdBody.contains(sel.anchorNode)) {
+          const rect = sel.getRangeAt(0).getBoundingClientRect();
+          bubble.style.left = (rect.left + rect.width / 2 + window.scrollX) + 'px';
+          bubble.style.top = (rect.top - 38 + window.scrollY) + 'px';
+          bubble.style.display = 'block';
+          pendingAnchor = { text, ...getSelectionContext(sel) };
+        } else {
+          bubble.style.display = 'none';
+          pendingAnchor = null;
+        }
+      }, 10);
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      if (!e.target.closest('#comment-bubble')) {
+        bubble.style.display = 'none';
+      }
+    });
+
+    bubble.addEventListener('mousedown', (e) => e.preventDefault());
+    bubble.addEventListener('click', () => {
+      if (!pendingAnchor) return;
+      bubble.style.display = 'none';
+      window.getSelection().removeAllRanges();
+      openCommentForm(pendingAnchor.text, undefined, pendingAnchor.before, pendingAnchor.after);
+    });
+
+    // ── Comment form (create + edit) ──────────────────────────────────────
+    const overlay = document.getElementById('comment-form-overlay');
+    const preview = document.getElementById('comment-anchor-preview');
+    const input = document.getElementById('comment-text-input');
+    const formTitle = document.getElementById('comment-form-title');
+    let formState = null; // { mode: 'create'|'edit', anchor, before?, after?, id? }
+
+    function openCommentForm(anchor, existingText, before, after, id) {
+      const mode = existingText !== undefined ? 'edit' : 'create';
+      formState = { mode, anchor, before: before || '', after: after || '', id };
+      formTitle.textContent = mode === 'edit' ? 'Edit comment' : 'Add comment';
+      preview.textContent = '"' + anchor.slice(0, 80) + (anchor.length > 80 ? '\\u2026' : '') + '"';
+      input.value = existingText || '';
+      submitBtn.disabled = false;
+      overlay.classList.add('open');
+      setTimeout(() => { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 50);
+    }
+
+    document.getElementById('comment-cancel').addEventListener('click', () => overlay.classList.remove('open'));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
+
+    const submitBtn = document.getElementById('comment-submit');
+    submitBtn.addEventListener('click', submitComment);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitComment();
+    });
+
+    async function submitComment() {
+      const text = input.value.trim();
+      if (!text || !formState) return;
+      submitBtn.disabled = true;
+      const isEdit = formState.mode === 'edit';
+      const body = isEdit
+        ? { file: FILE, id: formState.id, text }
+        : { file: FILE, anchor: formState.anchor, before: formState.before, after: formState.after, text };
+      try {
+        const res = await fetch('/_comment', {
+          method: isEdit ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          overlay.classList.remove('open');
+        } else {
+          alert('Could not save comment: ' + (data.error || 'unknown error'));
+          submitBtn.disabled = false;
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+        submitBtn.disabled = false;
+      }
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────
+    highlightComments();
+    renderSidebar();
+  })();
+  </script>
+  ` : ''}
 </body>
 </html>`;
 }
@@ -192,6 +833,168 @@ function createRequestHandler(docsDir) {
       return;
     }
 
+    // ── POST /_comment ────────────────────────────────────────────────────
+    if (pathname === '/_comment' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        let parsed;
+        try { parsed = JSON.parse(body); } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'invalid JSON' }));
+          return;
+        }
+
+        const { file, anchor, text, before = '', after = '' } = parsed;
+        if (!file || !anchor || !text ||
+            typeof file !== 'string' || typeof anchor !== 'string' || typeof text !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'missing or invalid fields' }));
+          return;
+        }
+
+        if (!file.endsWith('.md') || file.includes('/') || file.includes('\\')) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'invalid file name' }));
+          return;
+        }
+
+        const filePath = path.join(docsDir, file);
+        const resolvedDocsDir = path.resolve(docsDir);
+        if (!path.resolve(filePath).startsWith(resolvedDocsDir + path.sep)) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'forbidden' }));
+          return;
+        }
+
+        if (!fs.existsSync(filePath)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'file not found' }));
+          return;
+        }
+
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const updated = insertComment(raw, anchor, text, before, after);
+        if (!updated) {
+          res.writeHead(422, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'anchor text not found in file' }));
+          return;
+        }
+
+        fs.writeFileSync(filePath, updated, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
+
+    // ── PATCH /_comment (edit) ────────────────────────────────────────────
+    if (pathname === '/_comment' && req.method === 'PATCH') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        let parsed;
+        try { parsed = JSON.parse(body); } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'invalid JSON' }));
+          return;
+        }
+
+        const { file, id, text } = parsed;
+        if (!file || !id || !text ||
+            typeof file !== 'string' || typeof id !== 'string' || typeof text !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'missing or invalid fields' }));
+          return;
+        }
+
+        if (!file.endsWith('.md') || file.includes('/') || file.includes('\\')) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'invalid file name' }));
+          return;
+        }
+
+        const filePath = path.join(docsDir, file);
+        if (!path.resolve(filePath).startsWith(path.resolve(docsDir) + path.sep)) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'forbidden' }));
+          return;
+        }
+
+        if (!fs.existsSync(filePath)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'file not found' }));
+          return;
+        }
+
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const updated = editComment(raw, id, text);
+        if (!updated) {
+          res.writeHead(422, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'comment not found' }));
+          return;
+        }
+
+        fs.writeFileSync(filePath, updated, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
+
+    // ── DELETE /_comment ──────────────────────────────────────────────────
+    if (pathname === '/_comment' && req.method === 'DELETE') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        let parsed;
+        try { parsed = JSON.parse(body); } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'invalid JSON' }));
+          return;
+        }
+
+        const { file, id } = parsed;
+        if (!file || !id || typeof file !== 'string' || typeof id !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'missing or invalid fields' }));
+          return;
+        }
+
+        if (!file.endsWith('.md') || file.includes('/') || file.includes('\\')) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'invalid file name' }));
+          return;
+        }
+
+        const filePath = path.join(docsDir, file);
+        if (!path.resolve(filePath).startsWith(path.resolve(docsDir) + path.sep)) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'forbidden' }));
+          return;
+        }
+
+        if (!fs.existsSync(filePath)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'file not found' }));
+          return;
+        }
+
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const updated = deleteComment(raw, id);
+        if (!updated) {
+          res.writeHead(422, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'comment not found' }));
+          return;
+        }
+
+        fs.writeFileSync(filePath, updated, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
+
     if (pathname === '/' || pathname === '') {
       const files = listMarkdownFiles(docsDir);
       const items = files.length
@@ -211,7 +1014,6 @@ function createRequestHandler(docsDir) {
       const filePath = path.join(docsDir, filename);
       const resolvedDocsDir = path.resolve(docsDir);
 
-      // Security: ensure the resolved path stays within docsDir
       if (!filePath.startsWith(resolvedDocsDir + path.sep) &&
           filePath !== resolvedDocsDir) {
         res.writeHead(403, { 'Content-Type': 'text/plain' });
@@ -226,9 +1028,10 @@ function createRequestHandler(docsDir) {
       }
 
       const raw = fs.readFileSync(filePath, 'utf8');
-      const rendered = marked.parse(raw);
+      const comments = parseComments(raw);
+      const rendered = marked.parse(stripComments(raw));
       const title = filename.replace(/\.md$/, '');
-      const html = renderPage(title, `<div class="markdown-body">${rendered}</div>`);
+      const html = renderPage(title, `<div class="markdown-body">${rendered}</div>`, { comments, filename });
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
       return;
@@ -270,4 +1073,7 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, createRequestHandler, escapeHtml, listMarkdownFiles, renderPage };
+module.exports = {
+  server, createRequestHandler, escapeHtml, listMarkdownFiles, renderPage,
+  parseComments, stripComments, insertComment, deleteComment, editComment, cleanPosToRawPos,
+};
