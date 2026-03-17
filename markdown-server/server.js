@@ -8,6 +8,7 @@ const chokidar = require('chokidar');
 
 const PORT = process.env.PORT || 3000;
 const DOCS_DIR = process.env.DOCS_DIR || path.join(__dirname, 'docs');
+const USE_POLLING = process.env.USE_POLLING === 'true';
 
 // SSE clients waiting for reload events
 const sseClients = new Set();
@@ -130,6 +131,7 @@ function editComment(raw, id, newText) {
 function renderPage(title, bodyHtml, pageData) {
   const commentsJson = pageData ? JSON.stringify(pageData.comments || []) : '[]';
   const filenameJson = pageData ? JSON.stringify(pageData.filename || '') : '""';
+  const rawMarkdownJson = pageData ? JSON.stringify(pageData.rawMarkdown || '') : '""';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -212,8 +214,25 @@ function renderPage(title, bodyHtml, pageData) {
     header a:hover { text-decoration: underline; }
     .breadcrumb { color: var(--text-muted); font-size: 0.9rem; }
     .breadcrumb span { margin: 0 0.4rem; }
-    #theme-toggle {
+    .navbar-actions {
       margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .nav-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.25rem 0.55rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+    .nav-btn:hover { background: var(--code-bg); color: var(--text); }
+    #theme-toggle {
       background: none;
       border: 1px solid var(--border);
       border-radius: 4px;
@@ -224,6 +243,50 @@ function renderPage(title, bodyHtml, pageData) {
       line-height: 1;
     }
     #theme-toggle:hover { background: var(--code-bg); }
+    .recent-dropdown-wrapper { position: relative; }
+    #recent-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: var(--shadow);
+      z-index: 500;
+      min-width: 210px;
+      max-width: 320px;
+      display: none;
+    }
+    #recent-dropdown.open { display: block; }
+    .recent-dropdown-header {
+      padding: 0.45rem 0.75rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .recent-item {
+      display: block;
+      padding: 0.45rem 0.75rem;
+      text-decoration: none;
+      color: var(--text);
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .recent-item:last-child { border-bottom: none; }
+    .recent-item:hover { background: var(--code-bg); }
+    .recent-item.current { color: var(--text-muted); font-style: italic; }
+    .recent-empty {
+      padding: 0.75rem;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      text-align: center;
+    }
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -317,17 +380,15 @@ function renderPage(title, bodyHtml, pageData) {
     .comment-anchor:hover { background: var(--comment-hl-hover); }
 
     #comment-toggle {
-      position: fixed;
-      top: 0.7rem;
-      right: 1rem;
       background: var(--link);
       color: white;
       border: none;
       border-radius: 4px;
-      padding: 0.35rem 0.75rem;
+      padding: 0.25rem 0.55rem;
       cursor: pointer;
       font-size: 0.8rem;
-      z-index: 101;
+      white-space: nowrap;
+      line-height: 1.4;
     }
     #comment-toggle:hover { background: var(--link-hover); }
 
@@ -494,7 +555,15 @@ function renderPage(title, bodyHtml, pageData) {
   <header>
     <a href="/">📄 Markdown Server</a>
     <span class="breadcrumb">${title !== 'Index' ? `<span>/</span> ${escapeHtml(title)}` : ''}</span>
-    <button id="theme-toggle" title="Toggle dark mode">🌙</button>
+    <div class="navbar-actions">
+      ${pageData ? `<button id="copy-md-btn" class="nav-btn" title="Copy markdown without annotations">📋 Copy MD</button>
+      <button id="comment-toggle" class="nav-btn">💬 ${pageData.comments && pageData.comments.length ? pageData.comments.length + ' comment' + (pageData.comments.length !== 1 ? 's' : '') : 'Comments'}</button>` : ''}
+      <div class="recent-dropdown-wrapper">
+        <button id="recent-btn" class="nav-btn" title="Recent files">🕒 Recent</button>
+        <div id="recent-dropdown"></div>
+      </div>
+      <button id="theme-toggle" title="Toggle dark mode">🌙</button>
+    </div>
   </header>
   <div class="container">
     <div class="card">
@@ -504,8 +573,6 @@ function renderPage(title, bodyHtml, pageData) {
   <div id="reload-indicator">Reloaded</div>
 
   ${pageData ? `
-  <button id="comment-toggle">💬 ${pageData.comments && pageData.comments.length ? pageData.comments.length + ' comment' + (pageData.comments.length !== 1 ? 's' : '') : 'Comments'}</button>
-
   <div id="comment-sidebar">
     <div id="sidebar-header">
       <span>Comments</span>
@@ -549,6 +616,90 @@ function renderPage(title, bodyHtml, pageData) {
         applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
       });
     })();
+
+    // ── Recent files ──────────────────────────────────────────────────────
+    (function () {
+      const RECENT_KEY = 'md-server-recent';
+      const MAX_RECENT = 8;
+      const currentFile = ${filenameJson};
+
+      // Track current file visit
+      if (currentFile) {
+        try {
+          const recent = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+          const entry = { file: currentFile, title: document.title, ts: Date.now() };
+          const filtered = recent.filter(r => r.file !== currentFile);
+          filtered.unshift(entry);
+          localStorage.setItem(RECENT_KEY, JSON.stringify(filtered.slice(0, MAX_RECENT)));
+        } catch {}
+      }
+
+      const recentBtn = document.getElementById('recent-btn');
+      const dropdown = document.getElementById('recent-dropdown');
+
+      function escH(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      function renderDropdown() {
+        try {
+          const recent = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+          const items = recent.filter(r => r.file !== currentFile);
+          if (!items.length) {
+            dropdown.innerHTML = '<div class="recent-empty">No recent files</div>';
+          } else {
+            dropdown.innerHTML = '<div class="recent-dropdown-header">Recent files</div>' +
+              items.map(r => '<a class="recent-item" href="/' + encodeURIComponent(r.file) + '">' + escH(r.title || r.file) + '</a>').join('');
+          }
+        } catch {}
+      }
+
+      recentBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (dropdown.classList.contains('open')) {
+          dropdown.classList.remove('open');
+        } else {
+          renderDropdown();
+          dropdown.classList.add('open');
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.recent-dropdown-wrapper')) {
+          dropdown.classList.remove('open');
+        }
+      });
+    })();
+
+    ${pageData ? `
+    // ── Copy as Markdown ──────────────────────────────────────────────────
+    (function () {
+      const btn = document.getElementById('copy-md-btn');
+      if (!btn) return;
+      const RAW_MD = ${rawMarkdownJson};
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(RAW_MD);
+          const orig = btn.textContent;
+          btn.textContent = '✓ Copied!';
+          setTimeout(() => { btn.textContent = orig; }, 2000);
+        } catch {
+          // Fallback for browsers without clipboard API
+          const ta = document.createElement('textarea');
+          ta.value = RAW_MD;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          const orig = btn.textContent;
+          btn.textContent = '✓ Copied!';
+          setTimeout(() => { btn.textContent = orig; }, 2000);
+        }
+      });
+    })();
+    ` : ''}
   </script>
 
   ${pageData ? `
@@ -1029,9 +1180,10 @@ function createRequestHandler(docsDir) {
 
       const raw = fs.readFileSync(filePath, 'utf8');
       const comments = parseComments(raw);
-      const rendered = marked.parse(stripComments(raw));
+      const cleanMd = stripComments(raw);
+      const rendered = marked.parse(cleanMd);
       const title = filename.replace(/\.md$/, '');
-      const html = renderPage(title, `<div class="markdown-body">${rendered}</div>`, { comments, filename });
+      const html = renderPage(title, `<div class="markdown-body">${rendered}</div>`, { comments, filename, rawMarkdown: cleanMd });
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
       return;
@@ -1052,7 +1204,10 @@ if (require.main === module) {
 
   const watcher = chokidar.watch(DOCS_DIR, {
     ignoreInitial: true,
-    awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
+    usePolling: USE_POLLING,
+    interval: USE_POLLING ? 1000 : undefined,
+    binaryInterval: USE_POLLING ? 2000 : undefined,
+    awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
   });
 
   watcher.on('all', (event, filePath) => {
@@ -1063,7 +1218,7 @@ if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`Markdown server running at http://localhost:${PORT}`);
     console.log(`Serving files from: ${DOCS_DIR}`);
-    console.log(`Watching for changes...`);
+    console.log(`Watching for changes... ${USE_POLLING ? '(polling mode)' : '(native fs events)'}`);
   });
 
   process.on('SIGINT', () => {
