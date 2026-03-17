@@ -8,6 +8,7 @@ const chokidar = require('chokidar');
 
 const PORT = process.env.PORT || 3000;
 const DOCS_DIR = process.env.DOCS_DIR || path.join(__dirname, 'docs');
+const USE_POLLING = process.env.USE_POLLING === 'true';
 
 // SSE clients waiting for reload events
 const sseClients = new Set();
@@ -1203,7 +1204,10 @@ if (require.main === module) {
 
   const watcher = chokidar.watch(DOCS_DIR, {
     ignoreInitial: true,
-    awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
+    usePolling: USE_POLLING,
+    interval: USE_POLLING ? 1000 : undefined,
+    binaryInterval: USE_POLLING ? 2000 : undefined,
+    awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
   });
 
   watcher.on('all', (event, filePath) => {
@@ -1214,7 +1218,7 @@ if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`Markdown server running at http://localhost:${PORT}`);
     console.log(`Serving files from: ${DOCS_DIR}`);
-    console.log(`Watching for changes...`);
+    console.log(`Watching for changes... ${USE_POLLING ? '(polling mode)' : '(native fs events)'}`);
   });
 
   process.on('SIGINT', () => {
