@@ -295,6 +295,37 @@ describe('insertComment', () => {
     expect(parseComments(second)).toHaveLength(2);
     expect(stripComments(second)).toBe(raw);
   });
+
+  test('finds anchor inside bold markdown span', () => {
+    const raw = 'This is **important** text.';
+    const result = insertComment(raw, 'important', 'review', 'This is ', ' text.');
+    expect(result).not.toBeNull();
+    expect(stripComments(result)).toBe(raw);
+    const comments = parseComments(result);
+    expect(comments).toHaveLength(1);
+    expect(comments[0].anchor).toBe('important');
+    // Tag must come after the closing **
+    const tagPos = result.indexOf('<!-- @comment:');
+    expect(result.slice(0, tagPos)).toBe('This is **important**');
+  });
+
+  test('finds anchor inside italic markdown span', () => {
+    const raw = 'Click _here_ to continue.';
+    const result = insertComment(raw, 'here', 'link target', 'Click ', ' to');
+    expect(result).not.toBeNull();
+    expect(stripComments(result)).toBe(raw);
+    const tagPos = result.indexOf('<!-- @comment:');
+    expect(result.slice(0, tagPos)).toBe('Click _here_');
+  });
+
+  test('finds anchor in a blockquote line', () => {
+    const raw = '> This is a quoted line.';
+    const result = insertComment(raw, 'quoted', 'note', 'This is a ', ' line.');
+    expect(result).not.toBeNull();
+    expect(stripComments(result)).toBe(raw);
+    const comments = parseComments(result);
+    expect(comments[0].anchor).toBe('quoted');
+  });
 });
 
 // ─── POST /_comment ───────────────────────────────────────────────────────────
