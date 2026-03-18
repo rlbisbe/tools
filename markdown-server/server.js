@@ -70,11 +70,28 @@ function cleanPosToRawPos(raw, cleanPos) {
   return rawPos;
 }
 
+// Strip inline markdown markers and blockquote prefixes, returning stripped text + position map.
+// map[i] = position in original text corresponding to stripped[i].
+function stripMarkdownInlineWithMap(text) {
+  const re = /(?:^(?:>\s*)+)|\*\*|__|~~|\*|_|`/gm;
+  let stripped = '';
+  const map = [];
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    for (let i = last; i < m.index; i++) { map.push(i); stripped += text[i]; }
+    last = m.index + m[0].length;
+  }
+  for (let i = last; i < text.length; i++) { map.push(i); stripped += text[i]; }
+  return { stripped, map };
+}
+
 function insertComment(raw, anchor, commentText, before = '', after = '') {
   const clean = stripComments(raw);
 
   // Try progressively looser context matches
   let anchorStart = -1;
+  let anchorEnd = -1;
   const searches = [
     before + anchor + after,
     anchor + after,
@@ -87,12 +104,49 @@ function insertComment(raw, anchor, commentText, before = '', after = '') {
       // anchor starts at i + (length of the before-portion of s)
       const beforeLen = s.startsWith(before) ? before.length : 0;
       anchorStart = i + beforeLen;
+      anchorEnd = anchorStart + anchor.length;
+      // Advance past any closing inline marker that wraps the anchor
+      // e.g. anchor found inside **anchor** → insert after the closing **
+      const preMatch = clean.slice(0, anchorStart).match(/(\*\*|__|~~|\*|_|`)$/);
+      if (preMatch && clean.slice(anchorEnd).startsWith(preMatch[1])) {
+        anchorEnd += preMatch[1].length;
+      }
       break;
     }
   }
+
+  // Fallback: strip inline markdown formatting and blockquote prefixes, then search again.
+  // The client sends plain text (via sel.toString()), so anchors inside formatted spans
+  // (e.g. **bold**, > blockquote) won't match the raw markdown without this step.
+  if (anchorStart === -1) {
+    const { stripped, map } = stripMarkdownInlineWithMap(clean);
+    const strippedBefore = stripMarkdownInlineWithMap(before).stripped;
+    const strippedAfter  = stripMarkdownInlineWithMap(after).stripped;
+    const fallbackSearches = [
+      strippedBefore + anchor + strippedAfter,
+      anchor + strippedAfter,
+      strippedBefore + anchor,
+      anchor,
+    ];
+    for (const s of fallbackSearches) {
+      const i = stripped.indexOf(s);
+      if (i !== -1) {
+        const beforeLen = s.startsWith(strippedBefore) ? strippedBefore.length : 0;
+        const anchorStartStripped = i + beforeLen;
+        const anchorEndStripped   = anchorStartStripped + anchor.length;
+        anchorStart = map[anchorStartStripped];
+        // Map end position back to clean, then advance past any trailing inline markers.
+        const rawEnd = anchorEndStripped < map.length ? map[anchorEndStripped] : clean.length;
+        const trailingMatch = clean.slice(rawEnd).match(/^(?:\*\*|__|~~|\*|_|`)+/);
+        anchorEnd = rawEnd + (trailingMatch ? trailingMatch[0].length : 0);
+        break;
+      }
+    }
+  }
+
   if (anchorStart === -1) return null;
 
-  const insertAt = cleanPosToRawPos(raw, anchorStart + anchor.length);
+  const insertAt = cleanPosToRawPos(raw, anchorEnd);
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const payload = JSON.stringify({ id, anchor, before, after, text: commentText, date: new Date().toISOString().slice(0, 10) });
   return raw.slice(0, insertAt) + `<!-- @comment: ${payload} -->` + raw.slice(insertAt);
