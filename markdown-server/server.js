@@ -369,6 +369,12 @@ function renderPage(title, bodyHtml, pageData) {
       pointer-events: none;
     }
     #reload-indicator.visible { opacity: 1; }
+    .diff-add {
+      background: rgba(40, 167, 69, 0.3);
+      border-radius: 2px;
+      transition: background 2s ease;
+    }
+    .diff-add.fade { background: transparent; }
 
     /* ── Comments UI ──────────────────────────────────────────────────────── */
     .comment-anchor {
@@ -598,11 +604,104 @@ function renderPage(title, bodyHtml, pageData) {
 
   <script>
     const evtSource = new EventSource('/_sse');
-    evtSource.onmessage = (e) => {
-      if (e.data === 'reload') {
+    evtSource.onmessage = async function(e) {
+      if (e.data !== 'reload') return;
+      var file = window.location.pathname.replace(/^\//, '');
+      if (!file.endsWith('.md')) { window.location.reload(); return; }
+      try {
+        var resp = await fetch('/_content/' + encodeURIComponent(file));
+        if (!resp.ok) { window.location.reload(); return; }
+        var data = await resp.json();
+        var markdownBody = document.querySelector('.markdown-body');
+        if (!markdownBody) { window.location.reload(); return; }
+        var tmp = document.createElement('div');
+        tmp.innerHTML = data.html;
+        var oldWords = markdownBody.textContent.match(/\S+/g) || [];
+        var newWords = tmp.textContent.match(/\S+/g) || [];
+        var addedIndices = computeAddedIndices(oldWords, newWords);
+        if (addedIndices !== null && addedIndices.size > 0) {
+          wrapAddedWords(tmp, addedIndices);
+        }
+        markdownBody.innerHTML = tmp.innerHTML;
+        if (typeof window._highlightComments === 'function') window._highlightComments();
+        var ind = document.getElementById('reload-indicator');
+        if (ind) {
+          ind.classList.add('visible');
+          setTimeout(function() { ind.classList.remove('visible'); }, 2000);
+        }
+        if (addedIndices !== null && addedIndices.size > 0) {
+          setTimeout(function() {
+            var els = document.querySelectorAll('.diff-add');
+            for (var i = 0; i < els.length; i++) els[i].classList.add('fade');
+            setTimeout(function() {
+              var faded = document.querySelectorAll('.diff-add');
+              for (var i = faded.length - 1; i >= 0; i--) {
+                var el = faded[i];
+                el.replaceWith(document.createTextNode(el.textContent));
+              }
+            }, 2100);
+          }, 3000);
+        }
+      } catch(err) {
         window.location.reload();
       }
     };
+
+    function computeAddedIndices(oldWords, newWords) {
+      var m = oldWords.length, n = newWords.length;
+      if (m > 2000 || n > 2000) return null;
+      var dp = new Int32Array((m + 1) * (n + 1));
+      for (var i = 1; i <= m; i++) {
+        for (var j = 1; j <= n; j++) {
+          dp[i*(n+1)+j] = oldWords[i-1] === newWords[j-1]
+            ? dp[(i-1)*(n+1)+(j-1)] + 1
+            : Math.max(dp[(i-1)*(n+1)+j], dp[i*(n+1)+(j-1)]);
+        }
+      }
+      var inLCS = new Set();
+      var bi = m, bj = n;
+      while (bi > 0 && bj > 0) {
+        if (oldWords[bi-1] === newWords[bj-1]) { inLCS.add(bj-1); bi--; bj--; }
+        else if (dp[(bi-1)*(n+1)+bj] >= dp[bi*(n+1)+(bj-1)]) bi--;
+        else bj--;
+      }
+      var added = new Set();
+      for (var k = 0; k < n; k++) if (!inLCS.has(k)) added.add(k);
+      return added;
+    }
+
+    function wrapAddedWords(container, addedIndices) {
+      var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      var textNodes = [];
+      var node;
+      while ((node = walker.nextNode())) textNodes.push(node);
+      var wordIdx = 0;
+      for (var t = 0; t < textNodes.length; t++) {
+        var textNode = textNodes[t];
+        var tokens = textNode.textContent.split(/(\s+)/);
+        var frag = document.createDocumentFragment();
+        var anyAdded = false;
+        for (var k = 0; k < tokens.length; k++) {
+          var tok = tokens[k];
+          if (!tok) continue;
+          if (/^\s+$/.test(tok)) {
+            frag.appendChild(document.createTextNode(tok));
+          } else {
+            var idx = wordIdx++;
+            if (addedIndices.has(idx)) {
+              anyAdded = true;
+              var mark = document.createElement('mark');
+              mark.className = 'diff-add';
+              mark.textContent = tok;
+              frag.appendChild(mark);
+            } else {
+              frag.appendChild(document.createTextNode(tok));
+            }
+          }
+        }
+        if (anyAdded && textNode.parentNode) textNode.replaceWith(frag);
+      }
+    }
 
     (function () {
       const btn = document.getElementById('theme-toggle');
@@ -759,6 +858,7 @@ function renderPage(title, bodyHtml, pageData) {
         }
       });
     }
+    window._highlightComments = highlightComments;
 
     // Extract up to len chars of plain text before/after the selection
     function getSelectionContext(sel, len = 30) {
@@ -982,6 +1082,31 @@ function createRequestHandler(docsDir) {
       sseClients.add(res);
       res.on('close', () => sseClients.delete(res));
       return;
+    }
+
+    // ── GET /_content/<file>.md ──────────────────────────────────────────
+    if (pathname.startsWith('/_content/') && req.method === 'GET') {
+      const contentFile = pathname.slice('/_content/'.length);
+      if (contentFile.endsWith('.md') && !contentFile.includes('/') && !contentFile.includes('\\')) {
+        const filePath = path.join(docsDir, contentFile);
+        const resolvedDocsDir = path.resolve(docsDir);
+        if (!path.resolve(filePath).startsWith(resolvedDocsDir + path.sep)) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'forbidden' }));
+          return;
+        }
+        if (!fs.existsSync(filePath)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'not found' }));
+          return;
+        }
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const cleanMd = stripComments(raw);
+        const html = marked.parse(cleanMd);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ html }));
+        return;
+      }
     }
 
     // ── POST /_comment ────────────────────────────────────────────────────

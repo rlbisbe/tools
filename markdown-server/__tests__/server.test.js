@@ -153,6 +153,37 @@ describe('HTTP server', () => {
     });
   });
 
+  describe('GET /_content/<file>.md', () => {
+    test('returns rendered HTML as JSON', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'content-test.md'), '# Hello World');
+      const res = await request(baseUrl).get('/_content/content-test.md');
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/application\/json/);
+      const data = JSON.parse(res.text);
+      expect(data.html).toContain('<h1>Hello World</h1>');
+    });
+
+    test('returns 404 for non-existent file', async () => {
+      const res = await request(baseUrl).get('/_content/missing.md');
+      expect(res.status).toBe(404);
+    });
+
+    test('strips comment annotations from returned HTML', async () => {
+      const raw = 'Hello world<!-- @comment: {"anchor":"world","text":"nice","date":"2026-01-01"} -->!';
+      fs.writeFileSync(path.join(tmpDir, 'commented.md'), raw);
+      const res = await request(baseUrl).get('/_content/commented.md');
+      expect(res.status).toBe(200);
+      const { html } = JSON.parse(res.text);
+      expect(html).not.toContain('@comment');
+      expect(html).toContain('Hello world!');
+    });
+
+    test('returns 404 for non-.md content path', async () => {
+      const res = await request(baseUrl).get('/_content/notes.txt');
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe('GET /_sse', () => {
     test('returns 200 with event-stream content type', (done) => {
       const { port } = server.address();
