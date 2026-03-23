@@ -128,10 +128,16 @@ function editComment(raw, id, newText) {
 
 // ── Page renderer ─────────────────────────────────────────────────────────────
 
+// Serialize a value to JSON safe for embedding inside a <script> block.
+// JSON.stringify leaves </script> unescaped which terminates the script block.
+function safeJson(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+}
+
 function renderPage(title, bodyHtml, pageData) {
-  const commentsJson = pageData ? JSON.stringify(pageData.comments || []) : '[]';
-  const filenameJson = pageData ? JSON.stringify(pageData.filename || '') : '""';
-  const rawMarkdownJson = pageData ? JSON.stringify(pageData.rawMarkdown || '') : '""';
+  const commentsJson = safeJson(pageData ? (pageData.comments || []) : []);
+  const filenameJson = safeJson(pageData ? (pageData.filename || '') : '');
+  const rawMarkdownJson = safeJson(pageData ? (pageData.rawMarkdown || '') : '');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -677,26 +683,26 @@ function renderPage(title, bodyHtml, pageData) {
       const btn = document.getElementById('copy-md-btn');
       if (!btn) return;
       const RAW_MD = ${rawMarkdownJson};
+
+      function flashBtn(b) {
+        const orig = b.textContent;
+        b.textContent = '✓ Copied!';
+        setTimeout(() => { b.textContent = orig; }, 2000);
+      }
+
       btn.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(RAW_MD);
-          const orig = btn.textContent;
-          btn.textContent = '✓ Copied!';
-          setTimeout(() => { btn.textContent = orig; }, 2000);
         } catch {
-          // Fallback for browsers without clipboard API
           const ta = document.createElement('textarea');
           ta.value = RAW_MD;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
+          ta.style.cssText = 'position:fixed;opacity:0';
           document.body.appendChild(ta);
           ta.select();
           document.execCommand('copy');
           document.body.removeChild(ta);
-          const orig = btn.textContent;
-          btn.textContent = '✓ Copied!';
-          setTimeout(() => { btn.textContent = orig; }, 2000);
         }
+        flashBtn(btn);
       });
     })();
     ` : ''}
@@ -708,12 +714,15 @@ function renderPage(title, bodyHtml, pageData) {
     const COMMENTS = ${commentsJson};
     const FILE = ${filenameJson};
 
+    function truncate(str, n) {
+      return str.length > n ? str.slice(0, n) + '\u2026' : str;
+    }
+
     // ── Highlight anchors using context ──────────────────────────────────
     function highlightComments() {
       const body = document.querySelector('.markdown-body');
       if (!body) return;
 
-      // Build a flat text map of all text nodes once
       const nodeMap = [];
       const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
       let fullText = '';
@@ -742,7 +751,6 @@ function renderPage(title, bodyHtml, pageData) {
       COMMENTS.forEach((c, i) => {
         const before = c.before || '';
         const after  = c.after  || '';
-        // Try progressively looser matches, same order as server
         const candidates = [
           before + c.anchor + after,
           c.anchor + after,
@@ -771,7 +779,6 @@ function renderPage(title, bodyHtml, pageData) {
         pre.setEnd(range.startContainer, range.startOffset);
         const before = pre.toString().slice(-len);
 
-        // Find the last text position in body for the post-range
         const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
         let last = body;
         while (walker.nextNode()) last = walker.currentNode;
@@ -788,61 +795,91 @@ function renderPage(title, bodyHtml, pageData) {
     const sidebar = document.getElementById('comment-sidebar');
     const sidebarList = document.getElementById('sidebar-list');
 
+    function makeSidebarItem(c, i) {
+      const item = document.createElement('div');
+      item.className = 'sidebar-comment';
+      item.dataset.idx = i;
+
+      const anchorEl = document.createElement('div');
+      anchorEl.className = 'sc-anchor';
+      anchorEl.textContent = '"' + truncate(c.anchor, 60) + '"';
+
+      const textEl = document.createElement('div');
+      textEl.className = 'sc-text';
+      textEl.textContent = c.text;
+
+      const dateEl = document.createElement('div');
+      dateEl.className = 'sc-date';
+      dateEl.textContent = c.date || '';
+
+      const actions = document.createElement('div');
+      actions.className = 'sc-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'sc-btn edit';
+      editBtn.dataset.idx = i;
+      editBtn.textContent = 'Edit';
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'sc-btn delete';
+      delBtn.dataset.idx = i;
+      delBtn.textContent = 'Delete';
+
+      actions.append(editBtn, delBtn);
+      item.append(anchorEl, textEl, dateEl, actions);
+      return item;
+    }
+
     function renderSidebar() {
+      sidebarList.innerHTML = '';
       if (!COMMENTS.length) {
-        sidebarList.innerHTML = '<p class="sidebar-empty">No comments yet.<br>Select text to add one.</p>';
+        const empty = document.createElement('p');
+        empty.className = 'sidebar-empty';
+        empty.innerHTML = 'No comments yet.<br>Select text to add one.';
+        sidebarList.appendChild(empty);
         return;
       }
-      sidebarList.innerHTML = COMMENTS.map((c, i) => \`
-        <div class="sidebar-comment" data-idx="\${i}">
-          <div class="sc-anchor">"\${c.anchor.slice(0, 60)}\${c.anchor.length > 60 ? '\\u2026' : ''}"</div>
-          <div class="sc-text">\${c.text}</div>
-          <div class="sc-date">\${c.date || ''}</div>
-          <div class="sc-actions">
-            <button class="sc-btn edit" data-idx="\${i}">Edit</button>
-            <button class="sc-btn delete" data-idx="\${i}">Delete</button>
-          </div>
-        </div>
-      \`).join('');
-      sidebarList.querySelectorAll('.sidebar-comment').forEach(el => {
-        el.addEventListener('click', (e) => {
-          if (e.target.closest('.sc-actions')) return;
-          const anchor = document.querySelector(\`.comment-anchor[data-comment-idx="\${el.dataset.idx}"]\`);
-          if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
-      });
-      sidebarList.querySelectorAll('.sc-btn.edit').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const c = COMMENTS[parseInt(btn.dataset.idx)];
-          openCommentForm(c.anchor, c.text, c.before, c.after, c.id);
-        });
-      });
-      sidebarList.querySelectorAll('.sc-btn.delete').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const c = COMMENTS[parseInt(btn.dataset.idx)];
-          if (!confirm(\`Delete comment on "\${c.anchor.slice(0, 60)}\${c.anchor.length > 60 ? '\\u2026' : ''}"?\`)) return;
-          try {
-            const res = await fetch('/_comment', {
-              method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ file: FILE, id: c.id }),
-            });
-            const data = await res.json();
-            if (!data.ok) alert('Could not delete: ' + (data.error || 'unknown error'));
-          } catch (err) {
-            alert('Error: ' + err.message);
-          }
-        });
-      });
+      COMMENTS.forEach((c, i) => sidebarList.appendChild(makeSidebarItem(c, i)));
     }
+
+    // Event delegation — one listener handles all clicks in the sidebar list
+    sidebarList.addEventListener('click', async (e) => {
+      const editBtn = e.target.closest('.sc-btn.edit');
+      const delBtn  = e.target.closest('.sc-btn.delete');
+      const row     = e.target.closest('.sidebar-comment');
+      if (!row) return;
+
+      const idx = parseInt(row.dataset.idx);
+      const c = COMMENTS[idx];
+
+      if (editBtn) {
+        e.stopPropagation();
+        openCommentForm(c.anchor, c.text, c.before, c.after, c.id);
+      } else if (delBtn) {
+        e.stopPropagation();
+        if (!confirm('Delete comment on "' + truncate(c.anchor, 60) + '"?')) return;
+        try {
+          const res = await fetch('/_comment', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: FILE, id: c.id }),
+          });
+          const data = await res.json();
+          if (!data.ok) alert('Could not delete: ' + (data.error || 'unknown error'));
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      } else {
+        const anchor = document.querySelector('.comment-anchor[data-comment-idx="' + idx + '"]');
+        if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
 
     function openSidebar(scrollToIdx) {
       sidebar.classList.add('open');
       if (scrollToIdx !== undefined) {
         setTimeout(() => {
-          const el = sidebarList.querySelector(\`[data-idx="\${scrollToIdx}"]\`);
+          const el = sidebarList.querySelector('[data-idx="' + scrollToIdx + '"]');
           if (el) el.scrollIntoView({ block: 'nearest' });
         }, 50);
       }
@@ -893,13 +930,14 @@ function renderPage(title, bodyHtml, pageData) {
     const preview = document.getElementById('comment-anchor-preview');
     const input = document.getElementById('comment-text-input');
     const formTitle = document.getElementById('comment-form-title');
+    const submitBtn = document.getElementById('comment-submit');
     let formState = null; // { mode: 'create'|'edit', anchor, before?, after?, id? }
 
     function openCommentForm(anchor, existingText, before, after, id) {
       const mode = existingText !== undefined ? 'edit' : 'create';
       formState = { mode, anchor, before: before || '', after: after || '', id };
       formTitle.textContent = mode === 'edit' ? 'Edit comment' : 'Add comment';
-      preview.textContent = '"' + anchor.slice(0, 80) + (anchor.length > 80 ? '\\u2026' : '') + '"';
+      preview.textContent = '"' + truncate(anchor, 80) + '"';
       input.value = existingText || '';
       submitBtn.disabled = false;
       overlay.classList.add('open');
@@ -909,7 +947,6 @@ function renderPage(title, bodyHtml, pageData) {
     document.getElementById('comment-cancel').addEventListener('click', () => overlay.classList.remove('open'));
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
 
-    const submitBtn = document.getElementById('comment-submit');
     submitBtn.addEventListener('click', submitComment);
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitComment();
@@ -959,6 +996,41 @@ function listMarkdownFiles(dir) {
     .sort();
 }
 
+// Read request body and parse JSON. Calls cb(err, parsed) on completion.
+function readJsonBody(req, res, cb) {
+  let body = '';
+  req.on('data', chunk => { body += chunk; });
+  req.on('end', () => {
+    try { cb(null, JSON.parse(body)); } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'invalid JSON' }));
+    }
+  });
+}
+
+// Validate that `file` is a safe .md filename and resolve its path within docsDir.
+// Returns { filePath } on success or sends an error response and returns null.
+function resolveDocFile(file, docsDir, res) {
+  if (!file || typeof file !== 'string' ||
+      !file.endsWith('.md') || file.includes('/') || file.includes('\\')) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'invalid file name' }));
+    return null;
+  }
+  const filePath = path.join(docsDir, file);
+  if (!path.resolve(filePath).startsWith(path.resolve(docsDir) + path.sep)) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'forbidden' }));
+    return null;
+  }
+  if (!fs.existsSync(filePath)) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'file not found' }));
+    return null;
+  }
+  return filePath;
+}
+
 function createRequestHandler(docsDir) {
   return function handler(req, res) {
     const url = new URL(req.url, `http://localhost`);
@@ -986,44 +1058,16 @@ function createRequestHandler(docsDir) {
 
     // ── POST /_comment ────────────────────────────────────────────────────
     if (pathname === '/_comment' && req.method === 'POST') {
-      let body = '';
-      req.on('data', chunk => { body += chunk; });
-      req.on('end', () => {
-        let parsed;
-        try { parsed = JSON.parse(body); } catch {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'invalid JSON' }));
-          return;
-        }
-
+      readJsonBody(req, res, (err, parsed) => {
+        if (err) return;
         const { file, anchor, text, before = '', after = '' } = parsed;
-        if (!file || !anchor || !text ||
-            typeof file !== 'string' || typeof anchor !== 'string' || typeof text !== 'string') {
+        if (!anchor || !text || typeof anchor !== 'string' || typeof text !== 'string') {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: 'missing or invalid fields' }));
           return;
         }
-
-        if (!file.endsWith('.md') || file.includes('/') || file.includes('\\')) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'invalid file name' }));
-          return;
-        }
-
-        const filePath = path.join(docsDir, file);
-        const resolvedDocsDir = path.resolve(docsDir);
-        if (!path.resolve(filePath).startsWith(resolvedDocsDir + path.sep)) {
-          res.writeHead(403, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'forbidden' }));
-          return;
-        }
-
-        if (!fs.existsSync(filePath)) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'file not found' }));
-          return;
-        }
-
+        const filePath = resolveDocFile(file, docsDir, res);
+        if (!filePath) return;
         const raw = fs.readFileSync(filePath, 'utf8');
         const updated = insertComment(raw, anchor, text, before, after);
         if (!updated) {
@@ -1031,7 +1075,6 @@ function createRequestHandler(docsDir) {
           res.end(JSON.stringify({ ok: false, error: 'anchor text not found in file' }));
           return;
         }
-
         fs.writeFileSync(filePath, updated, 'utf8');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
@@ -1041,43 +1084,16 @@ function createRequestHandler(docsDir) {
 
     // ── PATCH /_comment (edit) ────────────────────────────────────────────
     if (pathname === '/_comment' && req.method === 'PATCH') {
-      let body = '';
-      req.on('data', chunk => { body += chunk; });
-      req.on('end', () => {
-        let parsed;
-        try { parsed = JSON.parse(body); } catch {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'invalid JSON' }));
-          return;
-        }
-
+      readJsonBody(req, res, (err, parsed) => {
+        if (err) return;
         const { file, id, text } = parsed;
-        if (!file || !id || !text ||
-            typeof file !== 'string' || typeof id !== 'string' || typeof text !== 'string') {
+        if (!id || !text || typeof id !== 'string' || typeof text !== 'string') {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: 'missing or invalid fields' }));
           return;
         }
-
-        if (!file.endsWith('.md') || file.includes('/') || file.includes('\\')) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'invalid file name' }));
-          return;
-        }
-
-        const filePath = path.join(docsDir, file);
-        if (!path.resolve(filePath).startsWith(path.resolve(docsDir) + path.sep)) {
-          res.writeHead(403, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'forbidden' }));
-          return;
-        }
-
-        if (!fs.existsSync(filePath)) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'file not found' }));
-          return;
-        }
-
+        const filePath = resolveDocFile(file, docsDir, res);
+        if (!filePath) return;
         const raw = fs.readFileSync(filePath, 'utf8');
         const updated = editComment(raw, id, text);
         if (!updated) {
@@ -1085,7 +1101,6 @@ function createRequestHandler(docsDir) {
           res.end(JSON.stringify({ ok: false, error: 'comment not found' }));
           return;
         }
-
         fs.writeFileSync(filePath, updated, 'utf8');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
@@ -1095,42 +1110,16 @@ function createRequestHandler(docsDir) {
 
     // ── DELETE /_comment ──────────────────────────────────────────────────
     if (pathname === '/_comment' && req.method === 'DELETE') {
-      let body = '';
-      req.on('data', chunk => { body += chunk; });
-      req.on('end', () => {
-        let parsed;
-        try { parsed = JSON.parse(body); } catch {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'invalid JSON' }));
-          return;
-        }
-
+      readJsonBody(req, res, (err, parsed) => {
+        if (err) return;
         const { file, id } = parsed;
-        if (!file || !id || typeof file !== 'string' || typeof id !== 'string') {
+        if (!id || typeof id !== 'string') {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: 'missing or invalid fields' }));
           return;
         }
-
-        if (!file.endsWith('.md') || file.includes('/') || file.includes('\\')) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'invalid file name' }));
-          return;
-        }
-
-        const filePath = path.join(docsDir, file);
-        if (!path.resolve(filePath).startsWith(path.resolve(docsDir) + path.sep)) {
-          res.writeHead(403, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'forbidden' }));
-          return;
-        }
-
-        if (!fs.existsSync(filePath)) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false, error: 'file not found' }));
-          return;
-        }
-
+        const filePath = resolveDocFile(file, docsDir, res);
+        if (!filePath) return;
         const raw = fs.readFileSync(filePath, 'utf8');
         const updated = deleteComment(raw, id);
         if (!updated) {
@@ -1138,7 +1127,6 @@ function createRequestHandler(docsDir) {
           res.end(JSON.stringify({ ok: false, error: 'comment not found' }));
           return;
         }
-
         fs.writeFileSync(filePath, updated, 'utf8');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
@@ -1229,6 +1217,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  server, createRequestHandler, escapeHtml, listMarkdownFiles, renderPage,
+  server, createRequestHandler, escapeHtml, safeJson, listMarkdownFiles, renderPage,
   parseComments, stripComments, insertComment, deleteComment, editComment, cleanPosToRawPos,
+  readJsonBody, resolveDocFile,
 };

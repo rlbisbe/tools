@@ -26,10 +26,24 @@ USE_POLLING=true POLL_INTERVAL=2000 npm start   # slower poll if needed
 ## Testing
 
 ```bash
-npm test           # jest (unit + integration + commonmark conformance)
+npm test              # jest: unit + integration + commonmark conformance
+npm run test:e2e      # Playwright: browser E2E tests (chromium)
+npm run test:all      # both suites
+npm run test:e2e:ui   # Playwright interactive UI mode
 ```
 
-All logic lives in `server.js`. Tests are in `__tests__/server.test.js` and `__tests__/commonmark.test.js`.
+**Jest** tests live in `__tests__/` — covers all server-side logic and HTTP routes.
+
+**Playwright** tests live in `e2e/` — covers client-side behavior:
+- `xss.spec.js` — XSS safety of comment sidebar rendering
+- `comments.spec.js` — highlight anchors, CRUD via browser UI
+- `dark-mode.spec.js` — theme toggle and localStorage persistence
+- `recent-files.spec.js` — recent files dropdown
+- `copy-md.spec.js` — copy-to-clipboard button
+
+The `e2e/fixtures.js` shared fixture spins up a real HTTP server on a random port (no chokidar watcher) with an isolated temp `docsDir` per test, and calls `httpServer.closeAllConnections()` on teardown to prevent SSE from blocking shutdown.
+
+Playwright config is at `playwright.config.js` (runs only Chromium by default). `playwright-report/` and `test-results/` are gitignored.
 
 ## Architecture
 
@@ -41,6 +55,9 @@ Everything is in a single file (`server.js`) — no framework, no build step.
 |---|---|
 | `createRequestHandler(docsDir)` | Returns the HTTP handler for a given docs directory |
 | `renderPage(title, bodyHtml, pageData?)` | Builds the full HTML page. `pageData` enables comment UI + navbar actions |
+| `safeJson(value)` | `JSON.stringify` with `<`/`>` escaped — safe for embedding in `<script>` blocks |
+| `readJsonBody(req, res, cb)` | Reads request body, parses JSON, calls `cb(err, parsed)`; sends 400 on parse failure |
+| `resolveDocFile(file, docsDir, res)` | Validates filename and resolves path; sends 400/403/404 and returns `null` on error |
 | `parseComments(raw)` | Extracts `<!-- @comment: {...} -->` tags from raw markdown |
 | `stripComments(raw)` | Removes comment tags before passing to `marked` |
 | `insertComment(raw, anchor, text)` | Inserts a comment after the first occurrence of `anchor` |
