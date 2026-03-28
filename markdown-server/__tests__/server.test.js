@@ -180,6 +180,49 @@ describe('HTTP server', () => {
   });
 });
 
+// ─── Mermaid support ─────────────────────────────────────────────────────────
+
+describe('Mermaid support', () => {
+  test('rendered page includes the Mermaid script tag', () => {
+    const html = renderPage('Doc', '<p>body</p>');
+    expect(html).toContain('mermaid');
+  });
+
+  test('rendered page includes mermaid.initialize call', () => {
+    const html = renderPage('Doc', '<p>body</p>');
+    expect(html).toContain('mermaid.initialize');
+  });
+
+  test('fenced mermaid block is rendered as code.language-mermaid', async () => {
+    let tmpDir;
+    let server;
+    let baseUrl;
+
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'md-mermaid-test-'));
+    server = http.createServer(createRequestHandler(tmpDir));
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+    try {
+      fs.writeFileSync(path.join(tmpDir, 'diagram.md'), [
+        '# Diagram',
+        '',
+        '```mermaid',
+        'graph TD',
+        '  A --> B',
+        '```',
+      ].join('\n'));
+
+      const res = await request(baseUrl).get('/diagram.md');
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('class="language-mermaid"');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
+});
+
 // ─── parseComments ────────────────────────────────────────────────────────────
 
 describe('parseComments', () => {
