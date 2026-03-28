@@ -258,7 +258,7 @@ describe('insertComment', () => {
   });
 
   test('inserted comment stores anchor, before, after, id, and date', () => {
-    const result = insertComment('the server runs fast', 'server', 'check this', 'the ', ' runs');
+    const result = insertComment('the server runs fast', 'server', 'check this', { before: 'the ', after: ' runs' });
     const comments = parseComments(result);
     expect(comments).toHaveLength(1);
     expect(comments[0].anchor).toBe('server');
@@ -271,7 +271,7 @@ describe('insertComment', () => {
 
   test('uses context to anchor the second occurrence of a repeated word', () => {
     const raw = 'server one and server two';
-    const result = insertComment(raw, 'server', 'second', 'and ', ' two');
+    const result = insertComment(raw, 'server', 'second', { before: 'and ', after: ' two' });
     const comments = parseComments(result);
     expect(comments[0].anchor).toBe('server');
     // The comment tag should appear after "and server", not after the first "server"
@@ -282,15 +282,15 @@ describe('insertComment', () => {
 
   test('stripComments after insert restores original text', () => {
     const original = 'Hello world, this is a test.';
-    const withComment = insertComment(original, 'world', 'a comment', 'Hello ', ', this');
+    const withComment = insertComment(original, 'world', 'a comment', { before: 'Hello ', after: ', this' });
     expect(stripComments(withComment)).toBe(original);
   });
 
   test('inserting a second comment on same word lands after existing tag', () => {
     const raw = 'server handles things';
-    const first = insertComment(raw, 'server', 'first comment', '', ' handles');
+    const first = insertComment(raw, 'server', 'first comment', { before: '', after: ' handles' });
     expect(first).not.toBeNull();
-    const second = insertComment(first, 'server', 'second comment', '', ' handles');
+    const second = insertComment(first, 'server', 'second comment', { before: '', after: ' handles' });
     expect(second).not.toBeNull();
     expect(parseComments(second)).toHaveLength(2);
     expect(stripComments(second)).toBe(raw);
@@ -389,7 +389,7 @@ describe('POST /_comment', () => {
 
 describe('deleteComment', () => {
   test('removes a comment by id', () => {
-    const raw = insertComment('Hello world!', 'world', 'note', 'Hello ', '!');
+    const raw = insertComment('Hello world!', 'world', 'note', { before: 'Hello ', after: '!' });
     const id = parseComments(raw)[0].id;
     const result = deleteComment(raw, id);
     expect(result).toBe('Hello world!');
@@ -415,7 +415,7 @@ describe('deleteComment', () => {
 
 describe('editComment', () => {
   test('updates the text of the comment with the given id', () => {
-    const raw = insertComment('Hello world!', 'world', 'old note', 'Hello ', '!');
+    const raw = insertComment('Hello world!', 'world', 'old note', { before: 'Hello ', after: '!' });
     const id = parseComments(raw)[0].id;
     const result = editComment(raw, id, 'new note');
     const comments = parseComments(result);
@@ -427,7 +427,7 @@ describe('editComment', () => {
 
   test('returns null when id does not match any comment', () => {
     const raw = insertComment('Hello world', 'world', 'note');
-    expect(editComment(raw, 'nonexistent-id', 'new text')).toBeNull();
+    expect(editComment(raw, { before: 'nonexistent-id', after: 'new text' })).toBeNull();
   });
 
   test('preserves other comments when editing one', () => {
@@ -464,7 +464,7 @@ describe('PATCH /_comment', () => {
   });
 
   test('updates the comment text and returns ok:true', async () => {
-    const initial = insertComment('Hello world!', 'Hello world', 'old', 'Hello ', '!');
+    const initial = insertComment('Hello world!', 'Hello world', 'old', { before: 'Hello ', after: '!' });
     const id = parseComments(initial)[0].id;
     fs.writeFileSync(path.join(tmpDir, 'doc.md'), initial);
     const res = await request(baseUrl)
@@ -513,7 +513,7 @@ describe('DELETE /_comment', () => {
   });
 
   test('removes the comment and returns ok:true', async () => {
-    const initial = insertComment('Hello world!', 'Hello world', 'note', '', '!');
+    const initial = insertComment('Hello world!', 'Hello world', 'note', { before: '', after: '!' });
     const id = parseComments(initial)[0].id;
     fs.writeFileSync(path.join(tmpDir, 'doc.md'), initial);
     const res = await request(baseUrl)

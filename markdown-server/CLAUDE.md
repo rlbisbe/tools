@@ -47,28 +47,51 @@ Playwright config is at `playwright.config.js` (runs only Chromium by default). 
 
 ## Architecture
 
-Everything is in a single file (`server.js`) — no framework, no build step.
+No framework, no build step. Code is split into focused modules:
 
-**Key exports / functions:**
+| File | Purpose |
+|---|---|
+| `server.js` | Entry point — config, watcher, server startup, re-exports |
+| `lib/comments.js` | Pure comment transforms (no dependencies) |
+| `lib/renderer.js` | `renderPage`, `escapeHtml`, `safeJson` |
+| `lib/handler.js` | `createRequestHandler`, SSE state, route handlers |
+| `views/page.ejs` | EJS HTML template (structure + inline JS) |
+| `public/styles.css` | All CSS |
+
+**`lib/comments.js`**
 
 | Function | What it does |
 |---|---|
-| `createRequestHandler(docsDir)` | Returns the HTTP handler for a given docs directory |
-| `renderPage(title, bodyHtml, pageData?)` | Builds the full HTML page. `pageData` enables comment UI + navbar actions |
-| `safeJson(value)` | `JSON.stringify` with `<`/`>` escaped — safe for embedding in `<script>` blocks |
-| `readJsonBody(req, res, cb)` | Reads request body, parses JSON, calls `cb(err, parsed)`; sends 400 on parse failure |
-| `resolveDocFile(file, docsDir, res)` | Validates filename and resolves path; sends 400/403/404 and returns `null` on error |
 | `parseComments(raw)` | Extracts `<!-- @comment: {...} -->` tags from raw markdown |
 | `stripComments(raw)` | Removes comment tags before passing to `marked` |
 | `insertComment(raw, anchor, text)` | Inserts a comment after the first occurrence of `anchor` |
 | `editComment(raw, id, newText)` | Updates the `text` field of a matching comment by id |
 | `deleteComment(raw, id)` | Removes a matching comment tag by id |
 
+**`lib/renderer.js`**
+
+| Function | What it does |
+|---|---|
+| `renderPage(title, bodyHtml, pageData?)` | Renders `views/page.ejs`. `pageData` enables comment UI + navbar actions |
+| `safeJson(value)` | `JSON.stringify` with `<`/`>` escaped — safe for embedding in `<script>` blocks |
+| `escapeHtml(str)` | Escapes `&`, `<`, `>`, `"` for safe HTML output |
+
+**`lib/handler.js`**
+
+| Function | What it does |
+|---|---|
+| `createRequestHandler(docsDir)` | Returns the HTTP handler for a given docs directory |
+| `notifyClients()` | Broadcasts a reload event to all SSE connections |
+| `readJsonBody(req, res, cb)` | Reads request body, parses JSON, calls `cb(err, parsed)`; sends 400 on parse failure |
+| `resolveDocFile(file, docsDir, res)` | Validates filename and resolves path; sends 400/403/404 and returns `null` on error |
+| `listMarkdownFiles(dir)` | Returns sorted list of `.md` files in `dir` |
+
 **Routes:**
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/_sse` | Server-Sent Events stream for live reload |
+| `GET` | `/styles.css` | Serves `public/styles.css` |
 | `GET` | `/` | File index |
 | `GET` | `/<file>.md` | Render markdown file |
 | `POST` | `/_comment` | Add a comment to a file |
@@ -98,7 +121,7 @@ Some important text<!-- @comment: {"id":"abc123","anchor":"important text","text
 
 ## Dark mode
 
-Uses CSS custom properties (`--bg`, `--surface`, `--border`, etc.) with a `[data-theme="dark"]` override block. Theme preference is persisted to `localStorage` and initialised before first paint (inline script in `<head>`) to avoid flash.
+Uses CSS custom properties (`--bg`, `--surface`, `--border`, etc.) defined in `public/styles.css`, with a `[data-theme="dark"]` override block. Theme preference is persisted to `localStorage` and initialised before first paint (inline script in `<head>` of `views/page.ejs`) to avoid flash.
 
 ## File watcher
 
