@@ -32,6 +32,12 @@ npm run test:all      # both suites
 npm run test:e2e:ui   # Playwright interactive UI mode
 ```
 
+**Every feature or bug fix must include tests. No change is complete without them.**
+
+- New server-side logic → unit tests in `__tests__/server.test.js`
+- New HTTP routes or rendered HTML → integration tests in `__tests__/server.test.js` using `supertest`
+- New client-side behaviour (DOM, localStorage, browser APIs) → Playwright spec in `e2e/`
+
 **Jest** tests live in `__tests__/` — covers all server-side logic and HTTP routes.
 
 **Playwright** tests live in `e2e/` — covers client-side behavior:
@@ -40,6 +46,7 @@ npm run test:e2e:ui   # Playwright interactive UI mode
 - `dark-mode.spec.js` — theme toggle and localStorage persistence
 - `recent-files.spec.js` — recent files dropdown
 - `copy-md.spec.js` — copy-to-clipboard button
+- `mermaid.spec.js` — Mermaid diagram rendering
 
 The `e2e/fixtures.js` shared fixture spins up a real HTTP server on a random port (no chokidar watcher) with an isolated temp `docsDir` per test, and calls `httpServer.closeAllConnections()` on teardown to prevent SSE from blocking shutdown.
 
