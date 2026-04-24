@@ -1,0 +1,34 @@
+[package]
+name = "markdown-viewer"
+version = "0.1.0"
+description = "Markdown Viewer — local markdown renderer with live reload and inline comments"
+authors = []
+license = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.10.3", features = ["protocol-asset"] }
+tauri-plugin-log = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+notify = "8"
+notify-debouncer-mini = "0.6"
+uuid = { version = "1", features = ["v4"] }
+rand = "0.8"
+tempfile = "3"
+dirs = "6"
+
+[dev-dependencies]

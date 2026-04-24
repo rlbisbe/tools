@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Markdown Viewer</title>
+  <!-- Theme applied inline before paint to prevent flash (REQ-NV-11) -->
+  <script>
+    (function () {
+      const saved = localStorage.getItem('md-viewer-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
+  <header class="toolbar" role="banner">
+    <button id="back-btn"
+            data-testid="back-btn"
+            aria-label="Back to file index"
+            hidden>← Back</button>
+    <span id="doc-title" class="doc-title" aria-live="polite"></span>
+    <nav class="toolbar-actions" aria-label="Toolbar">
+      <button id="copy-md-btn"
+              data-testid="copy-md-btn"
+              aria-label="Copy markdown"
+              hidden>📋 Copy MD</button>
+      <button id="comments-btn"
+              data-testid="comments-btn"
+              aria-label="Toggle comments"
+              hidden>
+        💬 Comments<span id="comments-count" data-testid="comments-count" hidden></span>
+      </button>
+      <button id="recent-btn"
+              data-testid="recent-btn"
+              aria-label="Recent files"
+              hidden>🕒 Recent</button>
+      <button id="theme-toggle"
+              data-testid="theme-toggle"
+              aria-label="Switch to dark mode">🌙</button>
+    </nav>
+    <div id="recent-dropdown" class="recent-dropdown" data-testid="recent-dropdown" hidden></div>
+  </header>
+
+  <!-- ── Watcher error banner (REQ-LR-05) ───────────────────────────── -->
+  <div id="watcher-error-banner" role="alert" data-testid="watcher-error-banner" hidden></div>
+
+  <!-- ── File index screen ──────────────────────────────────────────── -->
+  <main id="screen-index" data-testid="screen-index">
+    <h1 class="screen-title">Documents</h1>
+    <div id="file-index" data-testid="file-index" role="region" aria-label="File index"></div>
+  </main>
+
+  <!-- ── Document screen ────────────────────────────────────────────── -->
+  <div id="screen-doc" data-testid="screen-doc" hidden>
+    <div class="doc-layout">
+      <!-- Content area -->
+      <article id="doc-content"
+               class="markdown-body"
+               data-testid="doc-content"
+               role="main"
+               aria-label="Document content"></article>
+
+      <!-- Floating selection bubble (REQ-IC-17) -->
+      <div id="comment-bubble"
+           class="comment-bubble"
+           data-testid="comment-bubble"
+           hidden>
+        <button data-testid="add-comment-btn"
+                aria-label="Add comment to selected text">+ Add comment</button>
+      </div>
+
+      <!-- Comment form modal (REQ-IC-18, REQ-IC-19) -->
+      <div id="comment-form"
+           class="comment-form-overlay"
+           data-testid="comment-form"
+           role="dialog"
+           aria-modal="true"
+           aria-label="Add or edit comment"
+           hidden>
+        <div class="comment-form-card">
+          <p class="form-anchor-label">
+            Anchor: <span id="comment-form-anchor" data-testid="comment-form-anchor"></span>
+          </p>
+          <textarea id="comment-text-input"
+                    data-testid="comment-text-input"
+                    placeholder="Write your comment… (Cmd+Enter to save)"
+                    rows="4"></textarea>
+          <div class="form-actions">
+            <button id="comment-form-cancel"
+                    data-testid="comment-form-cancel">Cancel</button>
+            <button id="comment-form-submit"
+                    data-testid="comment-form-submit">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comment sidebar (REQ-IC-12) -->
+      <aside id="comment-sidebar"
+             class="comment-sidebar"
+             data-testid="comment-sidebar"
+             aria-label="Comments"
+             hidden>
+        <h2 class="sidebar-title">Comments</h2>
+        <div id="sidebar-list"
+             data-testid="sidebar-list"
+             role="list"
+             aria-label="Comment list"></div>
+      </aside>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+  <!-- Mermaid loaded async; mermaid.js init is driven by document.view.js -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js" defer></script>
+</body>
+</html>
